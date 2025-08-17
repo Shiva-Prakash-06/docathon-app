@@ -2,10 +2,17 @@
 {% set page_title = "Live Score: " + match.sport_name %}
 
 {% block content %}
-<div class="text-center mb-4">
-    <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
-    <h1 class="display-5">{{ match.sport_name }}</h1>
-    <p class="lead text-muted">{{ match.match_time | replace('T', ' ') }}</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
+        <h1 class="display-5">{{ match.sport_name }}</h1>
+        <p class="lead text-muted">{{ match.round_name }}</p>
+    </div>
+    <div>
+        <form action="{{ url_for('finalize_match', match_id=match.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to finalize this match? This will set the winner and complete the match.');">
+            <button type="submit" class="btn btn-lg btn-success">Finalize Match</button>
+        </form>
+    </div>
 </div>
 
 <div class="card bg-dark border-secondary">

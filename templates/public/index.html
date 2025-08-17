@@ -15,6 +15,7 @@
         <h2 class="pb-2 border-bottom">Today's Matches</h2>
         {% if todays_matches %}
             {% for match in todays_matches %}
+            <a href="{{ url_for('match_details', match_id=match.id) }}" class="text-decoration-none">
             <div class="card bg-dark border-secondary mb-3">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">

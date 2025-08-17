@@ -116,7 +116,7 @@ def home():
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     todays_matches_query = """
         SELECT
-            m.status, m.result_details, m.match_time, s.name AS sport_name,
+            m.id, m.status, m.result_details, m.match_time, s.name AS sport_name,
             c1.name AS class1_name, c2.name AS class2_name
         FROM matches m
         JOIN sports s ON m.sport_id = s.id
@@ -222,6 +222,47 @@ def matches():
     conn.close()
     
     return render_template('public/matches.html', all_matches=all_matches, page_title="Match Schedule")
+
+@app.route('/matches/<int:match_id>')
+def match_details(match_id):
+    """Displays a detailed view of a single match, including its score log."""
+    conn = get_db_connection()
+    
+    match = conn.execute("""
+        SELECT m.*, s.name as sport_name, r.name as round_name, c1.name as class1_name, c2.name as class2_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        JOIN rounds r ON m.round_id = r.id
+        JOIN classes c1 ON m.class1_id = c1.id
+        JOIN classes c2 ON m.class2_id = c2.id
+        WHERE m.id = ?
+    """, (match_id,)).fetchone()
+
+    if match is None:
+        flash('Match not found!', 'danger')
+        return redirect(url_for('matches'))
+
+    # --- NEW LOGIC ---
+    scores = {}
+    is_cricket = 'Cricket' in match['sport_name']
+    # If the match has started, calculate the detailed scores
+    if match['status'] in ('LIVE', 'COMPLETED'):
+        scores = {
+            match['class1_id']: get_live_scores(conn, match_id, match['class1_id']),
+            match['class2_id']: get_live_scores(conn, match_id, match['class2_id'])
+        }
+
+    score_log = conn.execute("""
+        SELECT sl.*, c.name as team_name
+        FROM score_log sl
+        JOIN classes c ON sl.team_id = c.id
+        WHERE sl.match_id = ?
+        ORDER BY sl.created_at DESC
+    """, (match_id,)).fetchall()
+
+    conn.close()
+    
+    return render_template('public/match_details.html', match=match, score_log=score_log, scores=scores, is_cricket=is_cricket, page_title="Match Details")
 
 
 # --- ADMIN AUTH ROUTES ---
@@ -618,6 +659,51 @@ def add_score():
         'new_overs': new_stats['overs'],
         'new_balls': new_stats['balls']
     })
+
+@app.route('/admin/matches/<int:match_id>/finalize', methods=['POST'])
+@admin_required
+def finalize_match(match_id):
+    """Calculates the winner, generates a result string, and finalizes the match."""
+    conn = get_db_connection()
+    
+    match = conn.execute('SELECT * FROM matches WHERE id = ?', (match_id,)).fetchone()
+    
+    # Calculate final stats for both teams
+    stats1 = get_live_scores(conn, match_id, match['class1_id'])
+    stats2 = get_live_scores(conn, match_id, match['class2_id'])
+    
+    # Determine the winner
+    if stats1['score'] > stats2['score']:
+        winner_id = match['class1_id']
+        winner_stats = stats1
+        loser_stats = stats2
+    else:
+        winner_id = match['class2_id']
+        winner_stats = stats2
+        loser_stats = stats1
+        
+    winner_name = conn.execute('SELECT name FROM classes WHERE id = ?', (winner_id,)).fetchone()['name']
+    
+    # Generate the result string
+    score_diff = abs(winner_stats['score'] - loser_stats['score'])
+    sport_name = conn.execute('SELECT name FROM sports WHERE id = ?', (match['sport_id'],)).fetchone()['name']
+    
+    result_details = f"{winner_name} won" # Default message
+    if 'Cricket' in sport_name:
+        result_details = f"{winner_name} won by {score_diff} runs"
+    elif 'Basketball' in sport_name:
+        result_details = f"{winner_name} won by {score_diff} points"
+        
+    # Update the match in the database
+    conn.execute(
+        'UPDATE matches SET status = ?, winner_id = ?, result_details = ? WHERE id = ?',
+        ('COMPLETED', winner_id, result_details, match_id)
+    )
+    conn.commit()
+    conn.close()
+    
+    flash(f"Match finalized successfully. {result_details}", 'success')
+    return redirect(url_for('list_matches'))
 
 
 # --- MAIN EXECUTION ---

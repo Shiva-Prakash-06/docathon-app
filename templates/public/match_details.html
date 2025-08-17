@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mb-4">
+    <a href="{{ url_for('matches') }}">&larr; Back to Full Schedule</a>
+    <h1 class="display-5">{{ match.sport_name }}</h1>
+    <p class="lead text-muted">{{ match.round_name }}</p>
+</div>
+
+<div class="card bg-dark border-secondary mb-4">
+    <div class="card-body p-4">
+        <div class="row align-items-center text-center">
+            <div class="col-5">
+                <h2 class="h3">{{ match.class1_name }}</h2>
+                {% if scores[match.class1_id] %}
+                <p class="display-4 fw-bold text-warning">
+                    <span id="score-{{ match.class1_id }}">{{ scores[match.class1_id].score }}</span>
+                    {% if is_cricket %}/<span id="wickets-{{ match.class1_id }}">{{ scores[match.class1_id].wickets }}</span>{% endif %}
+                </p>
+                {% if is_cricket %}
+                <p class="text-muted h5">
+                    Overs: <span id="overs-{{ match.class1_id }}">{{ scores[match.class1_id].overs }}</span>.<span id="balls-{{ match.class1_id }}">{{ scores[match.class1_id].balls }}</span>
+                </p>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="col-2">
+                <span class="display-4 text-muted">VS</span>
+            </div>
+            <div class="col-5">
+                <h2 class="h3">{{ match.class2_name }}</h2>
+                {% if scores[match.class2_id] %}
+                <p class="display-4 fw-bold text-warning">
+                    <span id="score-{{ match.class2_id }}">{{ scores[match.class2_id].score }}</span>
+                    {% if is_cricket %}/<span id="wickets-{{ match.class2_id }}">{{ scores[match.class2_id].wickets }}</span>{% endif %}
+                </p>
+                {% if is_cricket %}
+                <p class="text-muted h5">
+                    Overs: <span id="overs-{{ match.class2_id }}">{{ scores[match.class2_id].overs }}</span>.<span id="balls-{{ match.class2_id }}">{{ scores[match.class2_id].balls }}</span>
+                </p>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if match.status == 'COMPLETED' and match.result_details %}
+        <div class="text-center mt-3">
+            <p class="h5 fw-bold text-info">{{ match.result_details }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if score_log %}
+<h3 class="border-bottom pb-2 mb-3">Event Log</h3>
+<ul class="list-group">
+    {% for event in score_log %}
+    <li class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between">
+        <span>
+            <span class="fw-bold">{{ event.team_name }}</span> - {{ event.event_type }}
+        </span>
+        <span class="badge bg-warning text-dark">+{{ event.points_scored }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% elif match.status != 'UPCOMING' %}
+<p class="text-center">No scoring events have been logged for this match.</p>
+{% endif %}
+{% endblock %}
