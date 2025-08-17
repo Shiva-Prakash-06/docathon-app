@@ -522,10 +522,11 @@ def list_rounds():
     return render_template('admin/list_rounds.html', rounds=rounds)
 
 @app.route('/admin/rounds/new', methods=['GET', 'POST'])
+@app.route('/admin/rounds/new', methods=['GET', 'POST'])
 @admin_required
 def create_round():
     """Form to create a new round."""
-    conn = get_db_connection() # Open connection at the start
+    conn = get_db_connection()
     
     if request.method == 'POST':
         sport_id = request.form.get('sport_id')
@@ -545,12 +546,10 @@ def create_round():
         flash('Round created successfully!', 'success')
         return redirect(url_for('list_rounds'))
 
-    # --- THIS IS THE CORRECTED GET LOGIC ---
-    # Fetch the list of sports for the dropdown menu
+    # GET Logic: Fetch sports for the dropdown
     sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
     conn.close()
     
-    # Pass the 'sports' variable to the template
     return render_template('admin/round_form.html', sports=sports, form_title="Create New Round")
 
 @app.route('/admin/rounds/<int:round_id>/edit', methods=['GET', 'POST'])

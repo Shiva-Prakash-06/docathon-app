@@ -15,6 +15,7 @@
 <div class="card mt-4">
     <div class="card-body">
         <form method="POST">
+            {# This 'if' block is only for creating, so it's safe #}
             {% if not round %}
             <div class="mb-3">
                 <label for="sport_id" class="form-label">Sport</label>
@@ -29,7 +30,7 @@
 
             <div class="mb-3">
                 <label for="name" class="form-label">Round Name</label>
-                {# THIS IS THE CORRECTED LINE: It checks if 'round' exists before accessing '.name' #}
+                {# This safely provides an empty string '' as a fallback. #}
                 <input type="text" class="form-control" id="name" name="name" value="{{ round.name if round else '' }}" placeholder="e.g., Men's Singles Finals" required>
             </div>
 
