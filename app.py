@@ -522,7 +522,6 @@ def list_rounds():
     return render_template('admin/list_rounds.html', rounds=rounds)
 
 @app.route('/admin/rounds/new', methods=['GET', 'POST'])
-@app.route('/admin/rounds/new', methods=['GET', 'POST'])
 @admin_required
 def create_round():
     """Form to create a new round."""
@@ -558,7 +557,6 @@ def edit_round(round_id):
     """Form to edit an existing round."""
     conn = get_db_connection()
     if request.method == 'POST':
-        # This POST logic is already correct
         name = request.form.get('name')
         round_type = request.form.get('round_type')
         
@@ -568,10 +566,8 @@ def edit_round(round_id):
         flash('Round updated successfully!', 'success')
         return redirect(url_for('list_rounds'))
 
-    # --- THIS IS THE CORRECTED GET LOGIC ---
+    # GET Logic
     round_data = conn.execute('SELECT * FROM rounds WHERE id = ?', (round_id,)).fetchone()
-    
-    # We now also fetch the list of sports, which was missing before.
     sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
     conn.close()
     
@@ -579,7 +575,6 @@ def edit_round(round_id):
         flash('Round not found!', 'danger')
         return redirect(url_for('list_rounds'))
         
-    # We now pass both 'round' and 'sports' to the template.
     return render_template('admin/round_form.html', round=round_data, sports=sports, form_title="Edit Round")
 
 @app.route('/admin/rounds/<int:round_id>/delete', methods=['POST'])

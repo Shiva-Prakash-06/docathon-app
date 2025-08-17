@@ -11,11 +11,10 @@
     {% endif %}
 </div>
 
-
 <div class="card mt-4">
     <div class="card-body">
         <form method="POST">
-            {# This 'if' block is only for creating, so it's safe #}
+            {# Show sport selection only when creating a new round #}
             {% if not round %}
             <div class="mb-3">
                 <label for="sport_id" class="form-label">Sport</label>
@@ -30,7 +29,6 @@
 
             <div class="mb-3">
                 <label for="name" class="form-label">Round Name</label>
-                {# This safely provides an empty string '' as a fallback. #}
                 <input type="text" class="form-control" id="name" name="name" value="{{ round.name if round else '' }}" placeholder="e.g., Men's Singles Finals" required>
             </div>
 
@@ -38,7 +36,6 @@
                 <label for="round_type" class="form-label">Round Type</label>
                 <select class="form-select" id="round_type" name="round_type" required>
                     <option value="" disabled selected>Select a type...</option>
-                    {# This logic correctly checks if 'round' exists first #}
                     <option value="GROUP" {% if round and round.round_type == 'GROUP' %}selected{% endif %}>Group Stage</option>
                     <option value="KNOCKOUT" {% if round and round.round_type == 'KNOCKOUT' %}selected{% endif %}>Knockout</option>
                     <option value="QUARTER_FINAL" {% if round and round.round_type == 'QUARTER_FINAL' %}selected{% endif %}>Quarter-Final</option>
