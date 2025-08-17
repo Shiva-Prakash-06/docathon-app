@@ -36,3 +36,11 @@ body {
 .form-label {
     color: #f8f9fa; /* Light color for text */
 }
+
+.navbar-logo {
+    background-color: #FFFFE0; /* Gold */
+    border-radius: 50%; /* Makes the background a circle */
+    padding: 2px; /* Adds a little space between the logo and the edge */
+    height: 50px; /* Adjust height if needed */
+    width: 50px;  /* Ensure it's a perfect circle */
+}

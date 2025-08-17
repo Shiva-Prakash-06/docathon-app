@@ -264,6 +264,10 @@ def match_details(match_id):
     
     return render_template('public/match_details.html', match=match, score_log=score_log, scores=scores, is_cricket=is_cricket, page_title="Match Details")
 
+@app.route('/about')
+def about():
+    """Renders the about us page."""
+    return render_template('public/about.html', page_title="About Us")
 
 # --- ADMIN AUTH ROUTES ---
 
