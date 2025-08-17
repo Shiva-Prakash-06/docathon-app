@@ -1,0 +1,38 @@
+body {
+    background-color: #121212 !important;
+}
+
+/* Gold accent color for branding and key elements */
+.docathon-brand, .btn-warning {
+    color: #FFD700; /* Gold */
+    font-weight: bold;
+}
+
+.btn-warning {
+    background-color: #FFD700;
+    border-color: #FFD700;
+    color: #121212; /* Dark text on gold button */
+}
+
+.btn-warning:hover {
+    background-color: #e6c200;
+    border-color: #e6c200;
+    color: #121212;
+}
+
+/* Navbar specific styling */
+.navbar-brand {
+    font-size: 1.5rem;
+    color: #FFD700 !important;
+}
+
+/* Card styling for dark theme */
+.card {
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+}
+
+/* Ensure form labels are visible on dark background */
+.form-label {
+    color: #f8f9fa; /* Light color for text */
+}

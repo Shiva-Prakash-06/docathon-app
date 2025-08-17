@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set page_title = form_title %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+    <h1>{{ form_title }}</h1>
+    {% if round %}
+    <form action="{{ url_for('delete_round', round_id=round.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this round?');">
+        <button type="submit" class="btn btn-outline-danger">Delete Round</button>
+    </form>
+    {% endif %}
+</div>
+
+
+<div class="card mt-4">
+    <div class="card-body">
+        <form method="POST">
+            {% if not round %}
+            <div class="mb-3">
+                <label for="sport_id" class="form-label">Sport</label>
+                <select class="form-select" id="sport_id" name="sport_id" required>
+                    <option value="" disabled selected>Select a sport...</option>
+                    {% for sport in sports %}
+                    <option value="{{ sport.id }}">{{ sport.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label for="name" class="form-label">Round Name</label>
+                {# THIS IS THE CORRECTED LINE: It checks if 'round' exists before accessing '.name' #}
+                <input type="text" class="form-control" id="name" name="name" value="{{ round.name if round else '' }}" placeholder="e.g., Men's Singles Finals" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="round_type" class="form-label">Round Type</label>
+                <select class="form-select" id="round_type" name="round_type" required>
+                    <option value="" disabled selected>Select a type...</option>
+                    {# This logic correctly checks if 'round' exists first #}
+                    <option value="GROUP" {% if round and round.round_type == 'GROUP' %}selected{% endif %}>Group Stage</option>
+                    <option value="KNOCKOUT" {% if round and round.round_type == 'KNOCKOUT' %}selected{% endif %}>Knockout</option>
+                    <option value="QUARTER_FINAL" {% if round and round.round_type == 'QUARTER_FINAL' %}selected{% endif %}>Quarter-Final</option>
+                    <option value="SEMI_FINAL" {% if round and round.round_type == 'SEMI_FINAL' %}selected{% endif %}>Semi-Final</option>
+                    <option value="FINAL" {% if round and round.round_type == 'FINAL' %}selected{% endif %}>Final</option>
+                </select>
+            </div>
+
+            <div class="d-flex justify-content-end">
+                <a href="{{ url_for('list_rounds') }}" class="btn btn-secondary me-2">Cancel</a>
+                <button type="submit" class="btn btn-warning">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% set page_title = "Live Score: " + match.sport_name %}
+
+{% block content %}
+<div class="text-center mb-4">
+    <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
+    <h1 class="display-5">{{ match.sport_name }}</h1>
+    <p class="lead text-muted">{{ match.match_time | replace('T', ' ') }}</p>
+</div>
+
+<div class="card bg-dark border-secondary">
+    <div class="card-body p-4">
+        <div class="row align-items-center text-center">
+            <div class="col-5">
+                <h2 class="h3">{{ match.class1_name }}</h2>
+                <p class="display-1 fw-bold text-warning">
+                    <span id="score-{{ match.class1_id }}">{{ scores[match.class1_id].score }}</span>
+                    {% if is_cricket %}/<span id="wickets-{{ match.class1_id }}">{{ scores[match.class1_id].wickets }}</span>{% endif %}
+                </p>
+                {% if is_cricket %}
+                <p class="text-muted h5">
+                    Overs: <span id="overs-{{ match.class1_id }}">{{ scores[match.class1_id].overs }}</span>.<span id="balls-{{ match.class1_id }}">{{ scores[match.class1_id].balls }}</span>
+                </p>
+                {% endif %}
+            </div>
+            <div class="col-2">
+                <span class="display-4 text-muted">VS</span>
+            </div>
+            <div class="col-5">
+                <h2 class="h3">{{ match.class2_name }}</h2>
+                <p class="display-1 fw-bold text-warning">
+                    <span id="score-{{ match.class2_id }}">{{ scores[match.class2_id].score }}</span>
+                    {% if is_cricket %}/<span id="wickets-{{ match.class2_id }}">{{ scores[match.class2_id].wickets }}</span>{% endif %}
+                </p>
+                {% if is_cricket %}
+                <p class="text-muted h5">
+                    Overs: <span id="overs-{{ match.class2_id }}">{{ scores[match.class2_id].overs }}</span>.<span id="balls-{{ match.class2_id }}">{{ scores[match.class2_id].balls }}</span>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="row text-center">
+            <div class="col-6 border-end border-secondary">
+                <h4 class="mb-3">Score for {{ match.class1_name }}</h4>
+                <div class="btn-group" role="group">
+                    {% for button in buttons %}
+                    <button class="btn btn-outline-warning btn-lg score-btn"
+                            data-match-id="{{ match.id }}"
+                            data-team-id="{{ match.class1_id }}"
+                            data-points="{{ button.points }}"
+                            data-type="{{ button.type }}"
+                            data-counts-ball="{{ button.counts_as_ball }}">
+                        {{ button.label }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-6">
+                <h4 class="mb-3">Score for {{ match.class2_name }}</h4>
+                <div class="btn-group" role="group">
+                    {% for button in buttons %}
+                    <button class="btn btn-outline-warning btn-lg score-btn"
+                            data-match-id="{{ match.id }}"
+                            data-team-id="{{ match.class2_id }}"
+                            data-points="{{ button.points }}"
+                            data-type="{{ button.type }}"
+                            data-counts-ball="{{ button.counts_as_ball }}">
+                        {{ button.label }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const scoreButtons = document.querySelectorAll('.score-btn');
+    const isCricket = {{ is_cricket|tojson }};
+
+    async function addScore(dataset) {
+        try {
+            const response = await fetch('{{ url_for("add_score") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    match_id: dataset.matchId,
+                    team_id: dataset.teamId,
+                    points: dataset.points,
+                    event_type: dataset.type,
+                    counts_as_ball: dataset.countsBall
+                }),
+            });
+            
+            if (!response.ok) throw new Error('Network response was not ok');
+
+            const data = await response.json();
+            
+            // Update score display
+            document.getElementById(`score-${data.team_id}`).textContent = data.new_total;
+            
+            // If it's a cricket match, update wickets and overs too
+            if (isCricket) {
+                document.getElementById(`wickets-${data.team_id}`).textContent = data.new_wickets;
+                document.getElementById(`overs-${data.team_id}`).textContent = data.new_overs;
+                document.getElementById(`balls-${data.team_id}`).textContent = data.new_balls;
+            }
+
+        } catch (error) {
+            console.error('Error adding score:', error);
+            alert('Failed to update score. Please check the console.');
+        }
+    }
+
+    scoreButtons.forEach(button => {
+        button.addEventListener('click', () => addScore(button.dataset));
+    });
+});
+</script>
+{% endblock %}

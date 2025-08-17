@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set page_title = "Admin Dashboard" %}
+
+{% block content %}
+<h1 class="mb-4">Admin Dashboard</h1>
+<p>This is the protected admin area. From here, you will be able to manage matches, update scores, and oversee the event.</p>
+
+<div class="list-group mt-4">
+    <a href="{{ url_for('list_rounds') }}" class="list-group-item list-group-item-action">
+        Manage Rounds
+    </a>
+    <a href="{{ url_for('list_matches') }}" class="list-group-item list-group-item-action">
+        Manage Matches
+    </a>
+    <a href="{{ url_for('point_adjustments') }}" class="list-group-item list-group-item-action">
+        Manual Point Adjustments
+    </a>
+</div>
+{% endblock %}

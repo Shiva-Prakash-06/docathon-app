@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4 fw-bold docathon-brand">Official Leaderboard</h1>
+    <p class="lead text-muted">Standings are updated in real-time as match results are finalized.</p>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th style="width: 10%;">Rank</th>
+                <th>Class Name</th>
+                <th class="text-center">Played</th>
+                <th class="text-center">Won</th>
+                <th class="text-center">Lost</th>
+                <th class="text-center">Total Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in standings %}
+            <tr>
+                <td class="fw-bold h5">#{{ loop.index }}</td>
+                <td class="fw-semibold">{{ row.class_name }}</td>
+                <td class="text-center">{{ row.played }}</td>
+                <td class="text-center">{{ row.wins }}</td>
+                <td class="text-center">{{ row.losses }}</td>
+                <td class="text-center fw-bold h5 text-warning">{{ row.total_points }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-center">The competition has not started yet. Check back soon!</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set page_title = "Manual Point Adjustments" %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Manual Point Adjustments</h1>
+    <p class="text-muted">Use this form to award bonus points or apply penalties for overall achievements and other criteria.</p>
+</div>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header">
+                Add New Adjustment
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="class_id" class="form-label">Select Class</label>
+                        <select class="form-select" name="class_id" id="class_id" required>
+                            <option value="" disabled selected>-- Choose a class --</option>
+                            {% for class in classes %}
+                            <option value="{{ class.id }}">{{ class.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="points" class="form-label">Points</label>
+                        <input type="number" class="form-control" name="points" id="points" placeholder="e.g., 2 or -3" required>
+                        <div class="form-text">Enter a positive number for bonuses, a negative number for penalties.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Reason</label>
+                        <textarea class="form-control" name="reason" id="reason" rows="3" placeholder="e.g., Best Jersey, Disqualification" required></textarea>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning">Save Adjustment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <h4 class="mb-3">Adjustment Log</h4>
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="table table-sm">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th>Class</th>
+                        <th>Points</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for adj in adjustments %}
+                    <tr>
+                        <td>{{ adj.class_name }}</td>
+                        <td>
+                            {% if adj.points > 0 %}
+                                <span class="badge text-bg-success">+{{ adj.points }}</span>
+                            {% else %}
+                                <span class="badge text-bg-danger">{{ adj.points }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ adj.reason }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center">No adjustments made yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

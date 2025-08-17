@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4 fw-bold docathon-brand">Match Schedule</h1>
+    <p class="lead text-muted">Follow all the action, from upcoming games to live results.</p>
+</div>
+
+<div class="list-group">
+    {% for match in all_matches %}
+    <div class="list-group-item list-group-item-action bg-dark text-white border-secondary mb-3 rounded-3">
+        <div class="d-flex w-100 justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-1">{{ match.sport_name }}</h5>
+                <p class="mb-1 text-muted">{{ match.round_name }}</p>
+            </div>
+            {% if match.status == 'LIVE' %}
+                <span class="badge text-bg-danger fs-6">LIVE</span>
+            {% elif match.status == 'COMPLETED' %}
+                <span class="badge text-bg-secondary fs-6">Finished</span>
+            {% else %}
+                 <span class="badge text-bg-info fs-6">Upcoming</span>
+            {% endif %}
+        </div>
+        
+        <hr>
+
+        <div class="row align-items-center text-center my-3">
+            <div class="col-5">
+                <span class="h4 fw-semibold">{{ match.class1_name }}</span>
+            </div>
+            <div class="col-2">
+                <span class="h5 text-muted">VS</span>
+            </div>
+            <div class="col-5">
+                <span class="h4 fw-semibold">{{ match.class2_name }}</span>
+            </div>
+        </div>
+        
+        <div class="text-center">
+            {% if match.status == 'COMPLETED' or match.status == 'LIVE' %}
+                <p class="h5 fw-bold text-warning">{{ match.result_details or 'Result pending' }}</p>
+            {% else %}
+                <p class="text-info">{{ match.match_time | replace('T', ' at ') }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <p class="text-center">No matches have been scheduled yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}
