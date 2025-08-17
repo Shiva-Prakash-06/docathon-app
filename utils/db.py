@@ -1,7 +1,10 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'db', 'docathon.db')
+# Get the absolute path to the directory where this file (db.py) is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Construct the full path to the database file
+DB_PATH = os.path.join(BASE_DIR, '..', 'db', 'docathon.db')
 
 def get_db_connection():
     """Establishes a connection to the database."""
