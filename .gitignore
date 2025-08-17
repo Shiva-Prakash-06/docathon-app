@@ -1,0 +1,6 @@
+# Database file
+db/docathon.db
+
+# Python cache files
+__pycache__/
+*.pyc
