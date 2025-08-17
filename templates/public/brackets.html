@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .bracket-container {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 20px;
+    }
+    .round {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        flex-shrink: 0;
+        width: 250px;
+        margin-right: 50px;
+    }
+    .match {
+        position: relative;
+        background-color: #343a40; /* Bootstrap dark gray */
+        border: 1px solid #6c757d; /* Bootstrap secondary */
+        border-radius: .25rem;
+        padding: 10px;
+        margin: 10px 0;
+    }
+    .team {
+        display: flex;
+        justify-content: space-between;
+    }
+    .team.winner {
+        font-weight: bold;
+        color: #ffc107; /* Bootstrap warning/gold */
+    }
+    .connector {
+        position: absolute;
+        top: 50%;
+        right: -30px;
+        width: 30px;
+        height: 2px;
+        background-color: #6c757d;
+    }
+</style>
+
+<div class="text-center mb-5">
+    <a href="{{ url_for('list_brackets') }}">&larr; Back to All Brackets</a>
+    <h1 class="display-4 fw-bold docathon-brand">{{ sport_name }} Bracket</h1>
+</div>
+
+<div class="bracket-container">
+    {% for round_name, matches_in_round in rounds.items() %}
+    <div class="round">
+        <h4 class="text-center">{{ round_name }}</h4>
+        {% for match in matches_in_round %}
+            <div class="match">
+                <div class="team {% if match.winner_name == match.class1_name %}winner{% endif %}">
+                    <span>{{ match.class1_name }}</span>
+                </div>
+                <hr class="my-1 border-secondary">
+                <div class="team {% if match.winner_name == match.class2_name %}winner{% endif %}">
+                    <span>{{ match.class2_name }}</span>
+                </div>
+                {% if loop.index % 2 == 1 %}
+                <div class="connector"></div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

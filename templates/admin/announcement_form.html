@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% set page_title = "Manage Announcement" %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Manage Announcement</h1>
+    <p class="text-muted">The text you enter here will be displayed in a banner at the top of all public pages. To remove the banner, simply clear the text and save.</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="content" class="form-label">Announcement Text</label>
+                <textarea class="form-control" name="content" id="content" rows="4" placeholder="e.g., All football matches have been postponed due to rain.">{{ content }}</textarea>
+            </div>
+            <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-warning">Save Announcement</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

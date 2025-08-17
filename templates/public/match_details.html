@@ -66,4 +66,47 @@
 {% elif match.status != 'UPCOMING' %}
 <p class="text-center">No scoring events have been logged for this match.</p>
 {% endif %}
+
+{% if match.status == 'LIVE' %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const matchId = {{ match.id }};
+    const isCricket = {{ is_cricket|tojson }};
+    const team1Id = {{ match.class1_id }};
+    const team2Id = {{ match.class2_id }};
+
+    async function fetchScores() {
+        try {
+            const response = await fetch(`/api/match-scores/${matchId}`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            // Update Team 1
+            document.getElementById(`score-${team1Id}`).textContent = data[team1Id].score;
+            if (isCricket) {
+                document.getElementById(`wickets-${team1Id}`).textContent = data[team1Id].wickets;
+                document.getElementById(`overs-${team1Id}`).textContent = data[team1Id].overs;
+                document.getElementById(`balls-${team1Id}`).textContent = data[team1Id].balls;
+            }
+
+            // Update Team 2
+            document.getElementById(`score-${team2Id}`).textContent = data[team2Id].score;
+            if (isCricket) {
+                document.getElementById(`wickets-${team2Id}`).textContent = data[team2Id].wickets;
+                document.getElementById(`overs-${team2Id}`).textContent = data[team2Id].overs;
+                document.getElementById(`balls-${team2Id}`).textContent = data[team2Id].balls;
+            }
+
+        } catch (error) {
+            console.error('Error fetching scores:', error);
+        }
+    }
+
+    // Fetch scores every 30 seconds
+    setInterval(fetchScores, 30000);
+});
+</script>
+{% endif %}
+
 {% endblock %}

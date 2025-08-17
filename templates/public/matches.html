@@ -6,10 +6,42 @@
     <p class="lead text-muted">Follow all the action, from upcoming games to live results.</p>
 </div>
 
+<div class="card bg-dark border-secondary mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('matches') }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label for="sport_id" class="form-label">Filter by Sport</label>
+                    {# CORRECTED: Loop through 'sports' not 'sports_list' #}
+                    <select name="sport_id" id="sport_id" class="form-select">
+                        <option value="">All Sports</option>
+                        {% for sport in sports %}
+                            <option value="{{ sport.id }}">{{ sport.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label for="class_id" class="form-label">Filter by Class</label>
+                    {# CORRECTED: Loop through 'classes' not 'classes_list' #}
+                    <select name="class_id" id="class_id" class="form-select">
+                        <option value="">All Classes</option>
+                        {% for class in classes %}
+                            <option value="{{ class.id }}">{{ class.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button type="submit" class="btn btn-warning">Filter</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+
 <div class="list-group">
     {% for match in all_matches %}
     <a href="{{ url_for('match_details', match_id=match.id) }}" class="list-group-item list-group-item-action bg-dark text-white border-secondary mb-3 rounded-3 text-decoration-none">
-    <div class="list-group-item list-group-item-action bg-dark text-white border-secondary mb-3 rounded-3">
         <div class="d-flex w-100 justify-content-between align-items-center">
             <div>
                 <h5 class="mb-1">{{ match.sport_name }}</h5>
@@ -45,10 +77,12 @@
                 <p class="text-info">{{ match.match_time | replace('T', ' at ') }}</p>
             {% endif %}
         </div>
-    </div>
+    </a>
     {% else %}
-    <p class="text-center">No matches have been scheduled yet.</p>
-
+    <div class="text-center py-5">
+        <h4>No matches found for the selected filters.</h4>
+        <a href="{{ url_for('matches') }}">Clear filters</a>
+    </div>
     {% endfor %}
 </div>
 {% endblock %}

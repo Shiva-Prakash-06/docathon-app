@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4 fw-bold docathon-brand">Tournament Brackets</h1>
+    <p class="lead text-muted">Select a sport to view its tournament progression.</p>
+</div>
+
+<div class="list-group">
+    {% for sport in sports %}
+        <a href="{{ url_for('view_bracket', sport_id=sport.id) }}" class="list-group-item list-group-item-action bg-dark text-white border-secondary mb-3 rounded-3">
+            <h5 class="mb-1">{{ sport.name }}</h5>
+        </a>
+    {% else %}
+        <p class="text-center">No tournaments are available to display yet.</p>
+    {% endfor %}
+</div>
+{% endblock %}

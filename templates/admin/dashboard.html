@@ -6,6 +6,9 @@
 <p>This is the protected admin area. From here, you will be able to manage matches, update scores, and oversee the event.</p>
 
 <div class="list-group mt-4">
+    <a href="{{ url_for('manage_announcement') }}" class="list-group-item list-group-item-action">
+        Manage Announcements
+    </a>
     <a href="{{ url_for('list_rounds') }}" class="list-group-item list-group-item-action">
         Manage Rounds
     </a>
