@@ -30,9 +30,7 @@
                 </p>
                 {% endif %}
             </div>
-            <div class="col-2">
-                <span class="display-4 text-muted">VS</span>
-            </div>
+            <div class="col-2"><span class="display-4 text-muted">VS</span></div>
             <div class="col-5">
                 <h2 class="h3">{{ match.class2_name }}</h2>
                 <p class="display-1 fw-bold text-warning">
@@ -46,20 +44,16 @@
                 {% endif %}
             </div>
         </div>
-
         <hr class="my-4">
-
         <div class="row text-center">
             <div class="col-6 border-end border-secondary">
                 <h4 class="mb-3">Score for {{ match.class1_name }}</h4>
-                <div class="btn-group" role="group">
+                <div class="btn-group" role="group" id="team-{{ match.class1_id }}-controls">
                     {% for button in buttons %}
                     <button class="btn btn-outline-warning btn-lg score-btn"
-                            data-match-id="{{ match.id }}"
                             data-team-id="{{ match.class1_id }}"
-                            data-points="{{ button.points }}"
-                            data-type="{{ button.type }}"
-                            data-counts-ball="{{ button.counts_as_ball }}">
+                            data-is-complex="{{ button.isComplex|tojson }}"
+                            data-event='{{ button|tojson|forceescape }}'>
                         {{ button.label }}
                     </button>
                     {% endfor %}
@@ -67,14 +61,12 @@
             </div>
             <div class="col-6">
                 <h4 class="mb-3">Score for {{ match.class2_name }}</h4>
-                <div class="btn-group" role="group">
+                <div class="btn-group" role="group" id="team-{{ match.class2_id }}-controls">
                     {% for button in buttons %}
                     <button class="btn btn-outline-warning btn-lg score-btn"
-                            data-match-id="{{ match.id }}"
                             data-team-id="{{ match.class2_id }}"
-                            data-points="{{ button.points }}"
-                            data-type="{{ button.type }}"
-                            data-counts-ball="{{ button.counts_as_ball }}">
+                            data-is-complex="{{ button.isComplex|tojson }}"
+                            data-event='{{ button|tojson|forceescape }}'>
                         {{ button.label }}
                     </button>
                     {% endfor %}
@@ -84,48 +76,133 @@
     </div>
 </div>
 
+<div class="card bg-dark border-secondary mt-4">
+    <div class="card-body">
+        <h5 class="card-title">Log a Manual Event</h5>
+        <form action="{{ url_for('log_manual_event', match_id=match.id) }}" method="POST">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <select name="team_id" class="form-select" required>
+                        <option value="" disabled selected>-- Select Team --</option>
+                        <option value="{{ match.class1_id }}">{{ match.class1_name }}</option>
+                        <option value="{{ match.class2_id }}">{{ match.class2_name }}</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <input type="text" name="event_description" class="form-control" placeholder="e.g., Yellow Card, Great Save" required>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button type="submit" class="btn btn-info">Log Event</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const scoreButtons = document.querySelectorAll('.score-btn');
+    const matchId = {{ match.id }};
     const isCricket = {{ is_cricket|tojson }};
+    let activeComplexEvent = null; // Holds the first-click event data
 
-    async function addScore(dataset) {
-        try {
-            const response = await fetch('{{ url_for("add_score") }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    match_id: dataset.matchId,
-                    team_id: dataset.teamId,
-                    points: dataset.points,
-                    event_type: dataset.type,
-                    counts_as_ball: dataset.countsBall
-                }),
-            });
-            
-            if (!response.ok) throw new Error('Network response was not ok');
+    const runButtons = [
+        {'label': '+0', 'points': 0, 'type': 'Runs', 'counts_as_ball': 1},
+        {'label': '+1', 'points': 1, 'type': 'Runs', 'counts_as_ball': 1},
+        {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1},
+        {'label': '+4', 'points': 4, 'type': 'Runs', 'counts_as_ball': 1},
+        {'label': '+6', 'points': 6, 'type': 'Runs', 'counts_as_ball': 1},
+    ];
 
-            const data = await response.json();
-            
-            // Update score display
-            document.getElementById(`score-${data.team_id}`).textContent = data.new_total;
-            
-            // If it's a cricket match, update wickets and overs too
-            if (isCricket) {
-                document.getElementById(`wickets-${data.team_id}`).textContent = data.new_wickets;
-                document.getElementById(`overs-${data.team_id}`).textContent = data.new_overs;
-                document.getElementById(`balls-${data.team_id}`).textContent = data.new_balls;
-            }
-
-        } catch (error) {
-            console.error('Error adding score:', error);
-            alert('Failed to update score. Please check the console.');
+    function updateScoreDisplay(data) {
+        document.getElementById(`score-${data.team_id}`).textContent = data.new_total;
+        if (isCricket) {
+            document.getElementById(`wickets-${data.team_id}`).textContent = data.new_wickets;
+            document.getElementById(`overs-${data.team_id}`).textContent = data.new_overs;
+            document.getElementById(`balls-${data.team_id}`).textContent = data.new_balls;
         }
     }
 
-    scoreButtons.forEach(button => {
-        button.addEventListener('click', () => addScore(button.dataset));
-    });
+    async function sendRequest(url, body) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+            updateScoreDisplay(data);
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to update score.');
+        }
+    }
+
+    function resetControls(teamId) {
+        const controlDiv = document.getElementById(`team-${teamId}-controls`);
+        controlDiv.innerHTML = ''; // Clear current buttons
+        const originalButtons = {{ buttons|tojson }};
+        originalButtons.forEach(buttonData => {
+            const button = document.createElement('button');
+            button.className = 'btn btn-outline-warning btn-lg score-btn';
+            button.dataset.teamId = teamId;
+            button.dataset.isComplex = buttonData.isComplex;
+            button.dataset.event = JSON.stringify(buttonData);
+            button.textContent = buttonData.label;
+            controlDiv.appendChild(button);
+        });
+        activeComplexEvent = null;
+        addEventListenersToButtons(); // Re-attach listeners to new buttons
+    }
+
+    function showRunButtons(teamId, baseEvent) {
+        activeComplexEvent = { teamId, baseEvent };
+        const controlDiv = document.getElementById(`team-${teamId}-controls`);
+        controlDiv.innerHTML = `<span class="text-warning me-2">Runs on ${baseEvent.type}?</span>`;
+
+        runButtons.forEach(runData => {
+            const button = document.createElement('button');
+            button.className = 'btn btn-outline-info btn-lg';
+            button.textContent = runData.label;
+            button.onclick = () => {
+                const body = {
+                    match_id: matchId,
+                    team_id: teamId,
+                    base_event: baseEvent,
+                    extra_runs: runData
+                };
+                sendRequest('{{ url_for("log_complex_event") }}', body);
+                resetControls(teamId);
+            };
+            controlDiv.appendChild(button);
+        });
+    }
+
+    function handleButtonClick(event) {
+        const button = event.target;
+        const teamId = button.dataset.teamId;
+        const isComplex = button.dataset.isComplex === 'true';
+        const eventData = JSON.parse(button.dataset.event);
+
+        if (isComplex) {
+            showRunButtons(teamId, eventData);
+        } else {
+            const body = {
+                match_id: matchId, team_id: teamId,
+                points: eventData.points, event_type: eventData.type,
+                counts_as_ball: eventData.counts_as_ball
+            };
+            sendRequest('{{ url_for("add_score") }}', body);
+        }
+    }
+
+    function addEventListenersToButtons() {
+        document.querySelectorAll('.score-btn').forEach(button => {
+            button.addEventListener('click', handleButtonClick);
+        });
+    }
+
+    addEventListenersToButtons(); // Initial setup
 });
 </script>
 {% endblock %}

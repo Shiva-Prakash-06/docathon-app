@@ -22,7 +22,11 @@
             {% for row in standings %}
             <tr>
                 <td class="fw-bold h5">#{{ loop.index }}</td>
-                <td class="fw-semibold">{{ row.class_name }}</td>
+                <td class="fw-semibold">
+                    <a href="{{ url_for('class_points_log', class_id=row.class_id) }}" class="text-white text-decoration-none">
+                        {{ row.class_name }}
+                    </a>
+                </td>
                 <td class="text-center">{{ row.played }}</td>
                 <td class="text-center">{{ row.wins }}</td>
                 <td class="text-center">{{ row.losses }}</td>

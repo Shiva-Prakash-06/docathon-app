@@ -17,30 +17,27 @@ app.config.from_pyfile('config.py')
 SPORT_BUTTON_CONFIG = {
     'default': [{'label': '+1', 'points': 1, 'type': 'Point', 'counts_as_ball': 0}],
     'Cricket Boys': [
-        {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1},
-        {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1},
-        {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1},
-        {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1},
-        {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1},
-        {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0},
-        {'label': 'Nb', 'points': 1, 'type': 'No-Ball', 'counts_as_ball': 0},
-        {'label': 'W', 'points': 0, 'type': 'Wicket', 'counts_as_ball': 1},
-        {'label': '1+W', 'points': 1, 'type': 'Run Out', 'counts_as_ball': 1}, # New
-        {'label': '2+W', 'points': 2, 'type': 'Run Out', 'counts_as_ball': 1}, # New
+        {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False}, # <-- ADD THIS LINE
+        {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0, 'isComplex': True},
+        {'label': 'Nb', 'points': 1, 'type': 'No-Ball', 'counts_as_ball': 0, 'isComplex': True},
+        {'label': 'W', 'points': 0, 'type': 'Wicket', 'counts_as_ball': 1, 'isComplex': True},
     ],
     'Cricket Girls': [
-        {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1},
-        {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1},
-        {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1},
-        {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1},
-        {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1},
-        {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0},
-        {'label': 'Nb', 'points': 1, 'type': 'No-Ball', 'counts_as_ball': 0},
-        {'label': 'W', 'points': 0, 'type': 'Wicket', 'counts_as_ball': 1},
-        {'label': '1+W', 'points': 1, 'type': 'Run Out', 'counts_as_ball': 1}, # New
-        {'label': '2+W', 'points': 2, 'type': 'Run Out', 'counts_as_ball': 1}, # New
+        {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False}, # <-- ADD THIS LINE
+        {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
+        {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0, 'isComplex': True},
+        {'label': 'Nb', 'points': 1, 'type': 'No-Ball', 'counts_as_ball': 0, 'isComplex': True},
+        {'label': 'W', 'points': 0, 'type': 'Wicket', 'counts_as_ball': 1, 'isComplex': True},
     ],
-    # ... keep the other sports the same ...
     'Basketball (B)': [
         {'label': '+1', 'points': 1, 'type': 'Freethrow', 'counts_as_ball': 0},
         {'label': '+2', 'points': 2, 'type': 'Shot', 'counts_as_ball': 0},
@@ -181,6 +178,7 @@ def leaderboard():
             GROUP BY class_id
         )
         SELECT
+            cs.class_id, -- <-- THIS LINE IS ADDED
             cs.class_name,
             cs.played,
             cs.wins,
@@ -355,6 +353,78 @@ def about():
     """Renders the about us page."""
     return render_template('public/about.html', page_title="About Us")
 
+@app.route('/class-log/<int:class_id>')
+def class_points_log(class_id):
+    """Displays a detailed points breakdown for a single class."""
+    conn = get_db_connection()
+    
+    # Get class name
+    class_info = conn.execute('SELECT name FROM classes WHERE id = ?', (class_id,)).fetchone()
+    if class_info is None:
+        return redirect(url_for('leaderboard'))
+
+    # 1. Get Tournament Points
+    tournament_events = conn.execute("""
+        SELECT m.id, s.name as sport_name, r.round_type,
+            CASE
+                WHEN m.winner_id = ? AND r.round_type = 'FINAL' THEN 5
+                WHEN m.winner_id != ? AND r.round_type = 'FINAL' THEN 4
+                WHEN m.winner_id != ? AND r.round_type = 'SEMI_FINAL' THEN 3
+                WHEN m.winner_id != ? AND r.round_type = 'QUARTER_FINAL' THEN 2
+                ELSE 0
+            END AS points,
+            CASE
+                WHEN m.winner_id = ? THEN 'Won'
+                ELSE 'Lost'
+            END AS outcome
+        FROM matches m
+        JOIN rounds r ON m.round_id = r.id
+        JOIN sports s ON m.sport_id = s.id
+        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
+          AND r.round_type IN ('FINAL', 'SEMI_FINAL', 'QUARTER_FINAL')
+          AND points > 0
+    """, (class_id, class_id, class_id, class_id, class_id, class_id, class_id)).fetchall()
+
+    # 2. Get Participation Points
+    participation_events = conn.execute("""
+        SELECT DISTINCT s.name as sport_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
+    """, (class_id, class_id)).fetchall()
+
+    # 3. Get Manual Adjustments
+    adjustments = conn.execute(
+        'SELECT points, reason FROM point_adjustments WHERE class_id = ? ORDER BY created_at DESC', (class_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return render_template('public/class_points_log.html',
+                           class_name=class_info['name'],
+                           tournament_events=tournament_events,
+                           participation_events=participation_events,
+                           adjustments=adjustments,
+                           page_title=f"Points Log for {class_info['name']}")
+
+@app.route('/stories')
+def list_stories():
+    """Displays a list of all trending stories."""
+    conn = get_db_connection()
+    stories = conn.execute('SELECT * FROM stories ORDER BY created_at DESC').fetchall()
+    conn.close()
+    return render_template('public/list_stories.html', stories=stories, page_title="Trending Stories")
+
+@app.route('/stories/<int:story_id>')
+def view_story(story_id):
+    """Displays a single story."""
+    conn = get_db_connection()
+    story = conn.execute('SELECT * FROM stories WHERE id = ?', (story_id,)).fetchone()
+    conn.close()
+    if story is None:
+        return redirect(url_for('list_stories'))
+    return render_template('public/view_story.html', story=story, page_title=story['title'])
+
 
 # --- ADMIN AUTH ROUTES ---
 
@@ -488,7 +558,10 @@ def edit_match(match_id):
         flash('Match not found!', 'danger')
         return redirect(url_for('list_matches'))
         
-    return render_template('admin/match_form.html', match=match, form_title="Edit Match")
+    # NEW: Check if the sport uses the live score finalizer
+    uses_live_finalizer = match['sport_name'] in SPORT_BUTTON_CONFIG and match['sport_name'] != 'default'
+        
+    return render_template('admin/match_form.html', match=match, form_title="Edit Match", uses_live_finalizer=uses_live_finalizer)
 
 @app.route('/admin/matches/<int:match_id>/delete', methods=['POST'])
 @admin_required
@@ -749,6 +822,38 @@ def add_score():
         'new_balls': new_stats['balls']
     })
 
+@app.route('/admin/matches/log-complex-event', methods=['POST'])
+@admin_required
+def log_complex_event():
+    """Logs a complex, two-part event like a wide + runs."""
+    data = request.json
+    match_id = data.get('match_id')
+    team_id = data.get('team_id')
+    base_event = data.get('base_event') # e.g., {'points': 1, 'type': 'Wide', 'counts_as_ball': 0}
+    extra_runs = data.get('extra_runs') # e.g., {'points': 2, 'type': 'Runs', 'counts_as_ball': 1}
+
+    conn = get_db_connection()
+    # Log the base event (Wd, Nb, W)
+    conn.execute(
+        'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
+        (match_id, team_id, base_event['points'], base_event['type'], base_event['counts_as_ball'])
+    )
+    # Log any extra runs if they exist
+    if extra_runs['points'] > 0:
+        conn.execute(
+            'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
+            (match_id, team_id, extra_runs['points'], extra_runs['type'], extra_runs['counts_as_ball'])
+        )
+    conn.commit()
+
+    new_stats = get_live_scores(conn, match_id, team_id)
+    conn.close()
+
+    return jsonify({
+        'success': True, 'team_id': team_id, 'new_total': new_stats['score'],
+        'new_wickets': new_stats['wickets'], 'new_overs': new_stats['overs'], 'new_balls': new_stats['balls']
+    })
+
 @app.route('/admin/matches/<int:match_id>/finalize', methods=['POST'])
 @admin_required
 def finalize_match(match_id):
@@ -775,7 +880,7 @@ def finalize_match(match_id):
     
     result_details = f"{winner_name} won"
     if 'Cricket' in sport_name:
-        result_details = f"{winner_name} won by {score_diff} runs"
+        result_details = f"{winner_name} won"
     elif 'Basketball' in sport_name:
         result_details = f"{winner_name} won by {score_diff} points"
         
@@ -788,6 +893,85 @@ def finalize_match(match_id):
     
     flash(f"Match finalized successfully. {result_details}", 'success')
     return redirect(url_for('list_matches'))
+
+@app.route('/admin/matches/<int:match_id>/log-event', methods=['POST'])
+@admin_required
+def log_manual_event(match_id):
+    """Logs a manual, non-scoring event to the score_log."""
+    team_id = request.form.get('team_id')
+    event_description = request.form.get('event_description')
+
+    if not all([team_id, event_description]):
+        flash('Team and event description are required.', 'danger')
+    else:
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
+            (match_id, team_id, 0, event_description, 0)
+        )
+        conn.commit()
+        conn.close()
+        flash('Event logged successfully!', 'success')
+    
+    return redirect(url_for('live_score_editor', match_id=match_id))
+
+@app.route('/admin/stories')
+@admin_required
+def admin_list_stories():
+    """Admin page to list and manage stories."""
+    conn = get_db_connection()
+    stories = conn.execute('SELECT id, title, author FROM stories ORDER BY created_at DESC').fetchall()
+    conn.close()
+    return render_template('admin/list_stories_admin.html', stories=stories)
+
+@app.route('/admin/stories/new', methods=['GET', 'POST'])
+@admin_required
+def create_story():
+    """Admin form to create a new story."""
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        author = request.form.get('author')
+        
+        conn = get_db_connection()
+        conn.execute('INSERT INTO stories (title, content, author) VALUES (?, ?, ?)', (title, content, author))
+        conn.commit()
+        conn.close()
+        flash('Story created successfully!', 'success')
+        return redirect(url_for('admin_list_stories'))
+        
+    return render_template('admin/story_form.html', form_title="Create New Story")
+
+@app.route('/admin/stories/<int:story_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_story(story_id):
+    """Admin form to edit a story."""
+    conn = get_db_connection()
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        author = request.form.get('author')
+        
+        conn.execute('UPDATE stories SET title = ?, content = ?, author = ? WHERE id = ?', (title, content, author, story_id))
+        conn.commit()
+        conn.close()
+        flash('Story updated successfully!', 'success')
+        return redirect(url_for('admin_list_stories'))
+
+    story = conn.execute('SELECT * FROM stories WHERE id = ?', (story_id,)).fetchone()
+    conn.close()
+    return render_template('admin/story_form.html', story=story, form_title="Edit Story")
+
+@app.route('/admin/stories/<int:story_id>/delete', methods=['POST'])
+@admin_required
+def delete_story(story_id):
+    """Deletes a story."""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM stories WHERE id = ?', (story_id,))
+    conn.commit()
+    conn.close()
+    flash('Story deleted successfully.', 'success')
+    return redirect(url_for('admin_list_stories'))
 
 # --- CONTEXT PROCESSOR ---
 @app.context_processor
