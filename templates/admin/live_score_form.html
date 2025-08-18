@@ -13,6 +13,21 @@
             <button type="submit" class="btn btn-lg btn-success">Finalize Match</button>
         </form>
     </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
+        <h1 class="display-5">{{ match.sport_name }}</h1>
+        <p class="lead text-muted">{{ match.round_name }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form action="{{ url_for('undo_last_event', match_id=match.id) }}" method="POST">
+            <button type="submit" class="btn btn-lg btn-secondary">Undo Last Event</button>
+        </form>
+        <form action="{{ url_for('finalize_match', match_id=match.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to finalize this match?');">
+            <button type="submit" class="btn btn-lg btn-success">Finalize Match</button>
+        </form>
+    </div>
+</div>
 </div>
 
 <div class="card bg-dark border-secondary">

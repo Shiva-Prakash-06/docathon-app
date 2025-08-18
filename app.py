@@ -5,10 +5,12 @@ from utils.auth import admin_required
 from utils.db import get_db_connection
 import datetime
 import os
+from werkzeug.utils import secure_filename
 
 # --- APP SETUP ---
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 
 
 # --- CONFIGURATION & HELPERS ---
@@ -915,6 +917,29 @@ def log_manual_event(match_id):
     
     return redirect(url_for('live_score_editor', match_id=match_id))
 
+@app.route('/admin/matches/<int:match_id>/undo', methods=['POST'])
+@admin_required
+def undo_last_event(match_id):
+    """Finds and deletes the most recent event from the score_log for a match."""
+    conn = get_db_connection()
+    # Find the ID of the most recent log entry for this match
+    last_event = conn.execute(
+        'SELECT id FROM score_log WHERE match_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
+        (match_id,)
+    ).fetchone()
+
+    if last_event:
+        # If the last event was a complex one (like Run Out), we might have two entries to delete.
+        # This simplified version deletes just the very last entry.
+        conn.execute('DELETE FROM score_log WHERE id = ?', (last_event['id'],))
+        conn.commit()
+        flash('Last event has been undone.', 'success')
+    else:
+        flash('No event to undo.', 'warning')
+        
+    conn.close()
+    return redirect(url_for('live_score_editor', match_id=match_id))
+
 @app.route('/admin/stories')
 @admin_required
 def admin_list_stories():
@@ -932,14 +957,23 @@ def create_story():
         title = request.form.get('title')
         content = request.form.get('content')
         author = request.form.get('author')
-        
+        image_file = request.files.get('image')
+
+        image_filename = None
+        if image_file and image_file.filename != '':
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+
         conn = get_db_connection()
-        conn.execute('INSERT INTO stories (title, content, author) VALUES (?, ?, ?)', (title, content, author))
+        conn.execute(
+            'INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)',
+            (title, content, author, image_filename)
+        )
         conn.commit()
         conn.close()
         flash('Story created successfully!', 'success')
         return redirect(url_for('admin_list_stories'))
-        
+
     return render_template('admin/story_form.html', form_title="Create New Story")
 
 @app.route('/admin/stories/<int:story_id>/edit', methods=['GET', 'POST'])
@@ -951,8 +985,20 @@ def edit_story(story_id):
         title = request.form.get('title')
         content = request.form.get('content')
         author = request.form.get('author')
-        
-        conn.execute('UPDATE stories SET title = ?, content = ?, author = ? WHERE id = ?', (title, content, author, story_id))
+        image_file = request.files.get('image')
+
+        # Get current image filename
+        current_filename = conn.execute('SELECT image_filename FROM stories WHERE id = ?', (story_id,)).fetchone()['image_filename']
+
+        image_filename = current_filename
+        if image_file and image_file.filename != '':
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+
+        conn.execute(
+            'UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?',
+            (title, content, author, image_filename, story_id)
+        )
         conn.commit()
         conn.close()
         flash('Story updated successfully!', 'success')

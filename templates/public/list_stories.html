@@ -10,6 +10,9 @@
     {% for story in stories %}
     <div class="col">
         <div class="card h-100 bg-dark border-secondary">
+            {% if story.image_filename %}
+                <img src="{{ url_for('static', filename='uploads/' + story.image_filename) }}" class="card-img-top" alt="{{ story.title }}">
+            {% endif %}
             <div class="card-body">
                 <h5 class="card-title">{{ story.title }}</h5>
                 <p class="card-text text-muted">By {{ story.author or 'Docathon Staff' }}</p>

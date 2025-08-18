@@ -55,11 +55,16 @@
 <h3 class="border-bottom pb-2 mb-3">Event Log</h3>
 <ul class="list-group">
     {% for event in score_log %}
+    {# Check if the event_type is a standard scoring play #}
+    {% set is_standard_event = event.event_type in ['Run', 'Runs', 'Boundary', 'Wicket', 'Wide', 'No-Ball', 'Dot Ball', 'Run Out'] %}
     <li class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between">
-        <span>
+        <span class="{{ 'fw-bold' if not is_standard_event }}">
             <span class="fw-bold">{{ event.team_name }}</span> - {{ event.event_type }}
         </span>
+        {# Only show points badge if it was a scoring event #}
+        {% if is_standard_event %}
         <span class="badge bg-warning text-dark">+{{ event.points_scored }}</span>
+        {% endif %}
     </li>
     {% endfor %}
 </ul>
