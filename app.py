@@ -70,7 +70,6 @@ def home():
     """Renders a dynamic public landing page."""
     conn = get_db_connection()
 
-    # Query for the Top 3 on the leaderboard
     leaderboard_query = """
         WITH ClassStats AS (
             SELECT
@@ -82,7 +81,6 @@ def home():
         ),
         ParticipationPoints AS (
             SELECT class_id, COUNT(DISTINCT sport_id) * 1 AS participation_points
-            -- THIS SUBQUERY IS NOW CORRECTED WITH an ALIAS 't'
             FROM (
                 SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
                 UNION ALL
@@ -109,7 +107,7 @@ def home():
             GROUP BY c.id
         ),
         WinPoints AS (
-             SELECT
+            SELECT
                 winner_id as class_id,
                 COUNT(id) as win_points
             FROM matches
@@ -129,7 +127,6 @@ def home():
     """
     top_teams = conn.execute(leaderboard_query).fetchall()
 
-    # Query for today's matches (this part is unchanged)
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     todays_matches_query = """
         SELECT
@@ -174,12 +171,23 @@ def leaderboard():
             GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
-            -- ... (this part remains the same) ...
+            SELECT
+                class_id,
+                COUNT(DISTINCT sport_id) * 1 AS participation_points
+            FROM (
+                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                UNION ALL
+                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+            ) t
+            GROUP BY class_id
         ),
         AdjustmentPoints AS (
-            -- ... (this part remains the same) ...
+            SELECT
+                class_id,
+                SUM(points) AS adjustment_points
+            FROM point_adjustments
+            GROUP BY class_id
         ),
-        -- NEW: Calculate points only for non-walkover wins
         WinPoints AS (
             SELECT
                 winner_id as class_id,
@@ -208,7 +216,6 @@ def leaderboard():
     conn.close()
     
     return render_template('public/leaderboard.html', standings=standings, page_title="Leaderboard")
-
 
 @app.route('/matches')
 def matches():
@@ -366,60 +373,6 @@ def about():
     """Renders the about us page."""
     return render_template('public/about.html', page_title="About Us")
 
-@app.route('/class-log/<int:class_id>')
-def class_points_log(class_id):
-    """Displays a detailed points breakdown for a single class."""
-    conn = get_db_connection()
-    
-    # Get class name
-    class_info = conn.execute('SELECT name FROM classes WHERE id = ?', (class_id,)).fetchone()
-    if class_info is None:
-        return redirect(url_for('leaderboard'))
-
-    # 1. Get Tournament Points
-    tournament_events = conn.execute("""
-        SELECT m.id, s.name as sport_name, r.round_type,
-            CASE
-                WHEN m.winner_id = ? AND r.round_type = 'FINAL' THEN 5
-                WHEN m.winner_id != ? AND r.round_type = 'FINAL' THEN 4
-                WHEN m.winner_id != ? AND r.round_type = 'SEMI_FINAL' THEN 3
-                WHEN m.winner_id != ? AND r.round_type = 'QUARTER_FINAL' THEN 2
-                ELSE 0
-            END AS points,
-            CASE
-                WHEN m.winner_id = ? THEN 'Won'
-                ELSE 'Lost'
-            END AS outcome
-        FROM matches m
-        JOIN rounds r ON m.round_id = r.id
-        JOIN sports s ON m.sport_id = s.id
-        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
-          AND r.round_type IN ('FINAL', 'SEMI_FINAL', 'QUARTER_FINAL')
-          AND points > 0
-    """, (class_id, class_id, class_id, class_id, class_id, class_id, class_id)).fetchall()
-
-    # 2. Get Participation Points
-    participation_events = conn.execute("""
-        SELECT DISTINCT s.name as sport_name
-        FROM matches m
-        JOIN sports s ON m.sport_id = s.id
-        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
-    """, (class_id, class_id)).fetchall()
-
-    # 3. Get Manual Adjustments
-    adjustments = conn.execute(
-        'SELECT points, reason FROM point_adjustments WHERE class_id = ? ORDER BY created_at DESC', (class_id,)
-    ).fetchall()
-
-    conn.close()
-
-    return render_template('public/class_points_log.html',
-                           class_name=class_info['name'],
-                           tournament_events=tournament_events,
-                           participation_events=participation_events,
-                           adjustments=adjustments,
-                           page_title=f"Points Log for {class_info['name']}")
-
 @app.route('/stories')
 def list_stories():
     """Displays a list of all trending stories."""
@@ -467,6 +420,165 @@ def admin_dashboard():
 
 # --- ADMIN CONTENT MANAGEMENT ---
 
+@app.route('/admin/stories')
+@admin_required
+def admin_list_stories():
+    """Admin page to list and manage stories."""
+    conn = get_db_connection()
+    stories = conn.execute('SELECT id, title, author FROM stories ORDER BY created_at DESC').fetchall()
+    conn.close()
+    return render_template('admin/list_stories_admin.html', stories=stories)
+
+@app.route('/admin/stories/new', methods=['GET', 'POST'])
+@admin_required
+def create_story():
+    """Admin form to create a new story."""
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        author = request.form.get('author')
+        image_file = request.files.get('image')
+        
+        image_filename = None
+        if image_file and image_file.filename != '':
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)',
+            (title, content, author, image_filename)
+        )
+        conn.commit()
+        conn.close()
+        flash('Story created successfully!', 'success')
+        return redirect(url_for('admin_list_stories'))
+        
+    return render_template('admin/story_form.html', form_title="Create New Story")
+
+@app.route('/admin/stories/<int:story_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_story(story_id):
+    """Admin form to edit a story."""
+    conn = get_db_connection()
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        author = request.form.get('author')
+        image_file = request.files.get('image')
+
+        current_filename = conn.execute('SELECT image_filename FROM stories WHERE id = ?', (story_id,)).fetchone()['image_filename']
+
+        image_filename = current_filename
+        if image_file and image_file.filename != '':
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+        
+        conn.execute(
+            'UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?',
+            (title, content, author, image_filename, story_id)
+        )
+        conn.commit()
+        conn.close()
+        flash('Story updated successfully!', 'success')
+        return redirect(url_for('admin_list_stories'))
+
+    story = conn.execute('SELECT * FROM stories WHERE id = ?', (story_id,)).fetchone()
+    conn.close()
+    return render_template('admin/story_form.html', story=story, form_title="Edit Story")
+
+@app.route('/admin/stories/<int:story_id>/delete', methods=['POST'])
+@admin_required
+def delete_story(story_id):
+    """Deletes a story."""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM stories WHERE id = ?', (story_id,))
+    conn.commit()
+    conn.close()
+    flash('Story deleted successfully.', 'success')
+    return redirect(url_for('admin_list_stories'))
+
+@app.route('/admin/rounds')
+@admin_required
+def list_rounds():
+    conn = get_db_connection()
+    rounds = conn.execute("""
+        SELECT r.id, r.name, r.round_type, s.name as sport_name
+        FROM rounds r
+        JOIN sports s ON r.sport_id = s.id
+        ORDER BY s.name, r.id
+    """).fetchall()
+    conn.close()
+    return render_template('admin/list_rounds.html', rounds=rounds)
+
+@app.route('/admin/rounds/new', methods=['GET', 'POST'])
+@admin_required
+def create_round():
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        sport_id = request.form.get('sport_id')
+        name = request.form.get('name')
+        round_type = request.form.get('round_type')
+
+        if not all([sport_id, name, round_type]):
+            flash('All fields are required.', 'danger')
+            return redirect(url_for('create_round'))
+
+        conn.execute(
+            'INSERT INTO rounds (sport_id, name, round_type) VALUES (?, ?, ?)',
+            (sport_id, name, round_type)
+        )
+        conn.commit()
+        conn.close()
+        flash('Round created successfully!', 'success')
+        return redirect(url_for('list_rounds'))
+
+    sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
+    conn.close()
+    
+    return render_template('admin/round_form.html', sports=sports, form_title="Create New Round")
+
+@app.route('/admin/rounds/<int:round_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_round(round_id):
+    conn = get_db_connection()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        round_type = request.form.get('round_type')
+        
+        conn.execute('UPDATE rounds SET name = ?, round_type = ? WHERE id = ?', (name, round_type, round_id))
+        conn.commit()
+        conn.close()
+        flash('Round updated successfully!', 'success')
+        return redirect(url_for('list_rounds'))
+
+    round_data = conn.execute('SELECT * FROM rounds WHERE id = ?', (round_id,)).fetchone()
+    sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
+    conn.close()
+    
+    if round_data is None:
+        flash('Round not found!', 'danger')
+        return redirect(url_for('list_rounds'))
+        
+    return render_template('admin/round_form.html', round=round_data, sports=sports, form_title="Edit Round")
+
+@app.route('/admin/rounds/<int:round_id>/delete', methods=['POST'])
+@admin_required
+def delete_round(round_id):
+    conn = get_db_connection()
+    matches = conn.execute('SELECT id FROM matches WHERE round_id = ?', (round_id,)).fetchone()
+    
+    if matches:
+        flash('Cannot delete this round because matches are already attached to it.', 'danger')
+    else:
+        conn.execute('DELETE FROM rounds WHERE id = ?', (round_id,))
+        conn.commit()
+        flash('Round deleted successfully.', 'success')
+        
+    conn.close()
+    return redirect(url_for('list_rounds'))
+
 @app.route('/admin/matches')
 @admin_required
 def list_matches():
@@ -499,15 +611,13 @@ def create_match():
             flash('All fields are required.', 'danger')
             return redirect(url_for('create_match'))
 
-        # Validation to prevent a team from playing itself
         if class1_id == class2_id:
             flash('A class cannot play against itself. Please select two different teams.', 'danger')
-            # Re-fetch rounds and classes to re-render the form with an error
             rounds = conn.execute("SELECT r.id, r.name, s.name as sport_name FROM rounds r JOIN sports s ON r.sport_id = s.id ORDER BY s.name, r.id").fetchall()
             classes = conn.execute('SELECT * FROM classes ORDER BY name').fetchall()
             conn.close()
             default_time = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M')
-            return render_template('admin/match_form.html', rounds=rounds, classes=classes, default_time=default_time, form_title="Create New Match")
+            return render_template('admin/match_form.html', rounds=rounds, classes=classes, default_time=default_time, form_title="Create New Match", error="Teams cannot be the same.")
 
         sport_id = conn.execute('SELECT sport_id FROM rounds WHERE id = ?', (round_id,)).fetchone()['sport_id']
 
@@ -571,7 +681,6 @@ def edit_match(match_id):
         flash('Match not found!', 'danger')
         return redirect(url_for('list_matches'))
         
-    # NEW: Check if the sport uses the live score finalizer
     uses_live_finalizer = match['sport_name'] in SPORT_BUTTON_CONFIG and match['sport_name'] != 'default'
         
     return render_template('admin/match_form.html', match=match, form_title="Edit Match", uses_live_finalizer=uses_live_finalizer)
@@ -622,89 +731,6 @@ def declare_walkover(match_id):
     
     flash(f"{loser_name} recorded with a walkover. -3 points applied.", 'success')
     return redirect(url_for('list_matches'))
-
-@app.route('/admin/rounds')
-@admin_required
-def list_rounds():
-    conn = get_db_connection()
-    rounds = conn.execute("""
-        SELECT r.id, r.name, r.round_type, s.name as sport_name
-        FROM rounds r
-        JOIN sports s ON r.sport_id = s.id
-        ORDER BY s.name, r.id
-    """).fetchall()
-    conn.close()
-    return render_template('admin/list_rounds.html', rounds=rounds)
-
-@app.route('/admin/rounds/new', methods=['GET', 'POST'])
-@admin_required
-def create_round():
-    conn = get_db_connection()
-    
-    if request.method == 'POST':
-        sport_id = request.form.get('sport_id')
-        name = request.form.get('name')
-        round_type = request.form.get('round_type')
-
-        if not all([sport_id, name, round_type]):
-            flash('All fields are required.', 'danger')
-            return redirect(url_for('create_round'))
-
-        conn.execute(
-            'INSERT INTO rounds (sport_id, name, round_type) VALUES (?, ?, ?)',
-            (sport_id, name, round_type)
-        )
-        conn.commit()
-        conn.close()
-        flash('Round created successfully!', 'success')
-        return redirect(url_for('list_rounds'))
-
-    # GET Logic
-    sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
-    conn.close()
-    
-    return render_template('admin/round_form.html', sports=sports, form_title="Create New Round")
-
-@app.route('/admin/rounds/<int:round_id>/edit', methods=['GET', 'POST'])
-@admin_required
-def edit_round(round_id):
-    conn = get_db_connection()
-    if request.method == 'POST':
-        name = request.form.get('name')
-        round_type = request.form.get('round_type')
-        
-        conn.execute('UPDATE rounds SET name = ?, round_type = ? WHERE id = ?', (name, round_type, round_id))
-        conn.commit()
-        conn.close()
-        flash('Round updated successfully!', 'success')
-        return redirect(url_for('list_rounds'))
-
-    # GET Logic
-    round_data = conn.execute('SELECT * FROM rounds WHERE id = ?', (round_id,)).fetchone()
-    sports = conn.execute('SELECT * FROM sports ORDER BY name').fetchall()
-    conn.close()
-    
-    if round_data is None:
-        flash('Round not found!', 'danger')
-        return redirect(url_for('list_rounds'))
-        
-    return render_template('admin/round_form.html', round=round_data, sports=sports, form_title="Edit Round")
-
-@app.route('/admin/rounds/<int:round_id>/delete', methods=['POST'])
-@admin_required
-def delete_round(round_id):
-    conn = get_db_connection()
-    matches = conn.execute('SELECT id FROM matches WHERE round_id = ?', (round_id,)).fetchone()
-    
-    if matches:
-        flash('Cannot delete this round because matches are already attached to it.', 'danger')
-    else:
-        conn.execute('DELETE FROM rounds WHERE id = ?', (round_id,))
-        conn.commit()
-        flash('Round deleted successfully.', 'success')
-        
-    conn.close()
-    return redirect(url_for('list_rounds'))
 
 @app.route('/admin/adjustments', methods=['GET', 'POST'])
 @admin_required
@@ -761,8 +787,6 @@ def manage_announcement():
             
     return render_template('admin/announcement_form.html', content=content)
 
-# --- ADMIN LIVE SCORING ---
-
 @app.route('/admin/matches/<int:match_id>/live')
 @admin_required
 def live_score_editor(match_id):
@@ -796,7 +820,6 @@ def live_score_editor(match_id):
 @app.route('/admin/matches/add-score', methods=['POST'])
 @admin_required
 def add_score():
-    """AJAX endpoint to add a score event and return all updated stats."""
     data = request.json
     match_id = data.get('match_id')
     team_id = data.get('team_id')
@@ -806,26 +829,21 @@ def add_score():
 
     conn = get_db_connection()
     
-    # Insert the main scoring event
     conn.execute(
         'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
         (match_id, team_id, points, event_type, counts_as_ball)
     )
 
-    # NEW: If the event is a Run Out, also log a 'Wicket' event that doesn't count as a ball
     if event_type == 'Run Out':
         conn.execute(
             'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
-            (match_id, team_id, 0, 'Wicket', 0) # 0 points, 0 balls
+            (match_id, team_id, 0, 'Wicket', 0)
         )
 
     conn.commit()
-
-    # Calculate all new stats for the team using the helper
     new_stats = get_live_scores(conn, match_id, team_id)
     conn.close()
 
-    # Return all updated stats in the JSON response
     return jsonify({
         'success': True,
         'team_id': team_id,
@@ -838,20 +856,19 @@ def add_score():
 @app.route('/admin/matches/log-complex-event', methods=['POST'])
 @admin_required
 def log_complex_event():
-    """Logs a complex, two-part event like a wide + runs."""
     data = request.json
     match_id = data.get('match_id')
     team_id = data.get('team_id')
-    base_event = data.get('base_event') # e.g., {'points': 1, 'type': 'Wide', 'counts_as_ball': 0}
-    extra_runs = data.get('extra_runs') # e.g., {'points': 2, 'type': 'Runs', 'counts_as_ball': 1}
+    base_event = data.get('base_event')
+    extra_runs = data.get('extra_runs')
 
     conn = get_db_connection()
-    # Log the base event (Wd, Nb, W)
+    
     conn.execute(
         'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
         (match_id, team_id, base_event['points'], base_event['type'], base_event['counts_as_ball'])
     )
-    # Log any extra runs if they exist
+    
     if extra_runs['points'] > 0:
         conn.execute(
             'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
@@ -879,23 +896,12 @@ def finalize_match(match_id):
     
     if stats1['score'] > stats2['score']:
         winner_id = match['class1_id']
-        winner_stats = stats1
-        loser_stats = stats2
     else:
         winner_id = match['class2_id']
-        winner_stats = stats2
-        loser_stats = stats1
         
     winner_name = conn.execute('SELECT name FROM classes WHERE id = ?', (winner_id,)).fetchone()['name']
     
-    score_diff = abs(winner_stats['score'] - loser_stats['score'])
-    sport_name = conn.execute('SELECT name FROM sports WHERE id = ?', (match['sport_id'],)).fetchone()['name']
-    
     result_details = f"{winner_name} won"
-    if 'Cricket' in sport_name:
-        result_details = f"{winner_name} won"
-    elif 'Basketball' in sport_name:
-        result_details = f"{winner_name} won by {score_diff} points"
         
     conn.execute(
         'UPDATE matches SET status = ?, winner_id = ?, result_details = ? WHERE id = ?',
@@ -907,41 +913,17 @@ def finalize_match(match_id):
     flash(f"Match finalized successfully. {result_details}", 'success')
     return redirect(url_for('list_matches'))
 
-@app.route('/admin/matches/<int:match_id>/log-event', methods=['POST'])
-@admin_required
-def log_manual_event(match_id):
-    """Logs a manual, non-scoring event to the score_log."""
-    team_id = request.form.get('team_id')
-    event_description = request.form.get('event_description')
-
-    if not all([team_id, event_description]):
-        flash('Team and event description are required.', 'danger')
-    else:
-        conn = get_db_connection()
-        conn.execute(
-            'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
-            (match_id, team_id, 0, event_description, 0)
-        )
-        conn.commit()
-        conn.close()
-        flash('Event logged successfully!', 'success')
-    
-    return redirect(url_for('live_score_editor', match_id=match_id))
-
 @app.route('/admin/matches/<int:match_id>/undo', methods=['POST'])
 @admin_required
 def undo_last_event(match_id):
-    """Finds and deletes the most recent event from the score_log for a match."""
     conn = get_db_connection()
-    # Find the ID of the most recent log entry for this match
+    
     last_event = conn.execute(
         'SELECT id FROM score_log WHERE match_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
         (match_id,)
     ).fetchone()
 
     if last_event:
-        # If the last event was a complex one (like Run Out), we might have two entries to delete.
-        # This simplified version deletes just the very last entry.
         conn.execute('DELETE FROM score_log WHERE id = ?', (last_event['id'],))
         conn.commit()
         flash('Last event has been undone.', 'success')
@@ -950,85 +932,6 @@ def undo_last_event(match_id):
         
     conn.close()
     return redirect(url_for('live_score_editor', match_id=match_id))
-
-@app.route('/admin/stories')
-@admin_required
-def admin_list_stories():
-    """Admin page to list and manage stories."""
-    conn = get_db_connection()
-    stories = conn.execute('SELECT id, title, author FROM stories ORDER BY created_at DESC').fetchall()
-    conn.close()
-    return render_template('admin/list_stories_admin.html', stories=stories)
-
-@app.route('/admin/stories/new', methods=['GET', 'POST'])
-@admin_required
-def create_story():
-    """Admin form to create a new story."""
-    if request.method == 'POST':
-        title = request.form.get('title')
-        content = request.form.get('content')
-        author = request.form.get('author')
-        image_file = request.files.get('image')
-
-        image_filename = None
-        if image_file and image_file.filename != '':
-            image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-
-        conn = get_db_connection()
-        conn.execute(
-            'INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)',
-            (title, content, author, image_filename)
-        )
-        conn.commit()
-        conn.close()
-        flash('Story created successfully!', 'success')
-        return redirect(url_for('admin_list_stories'))
-
-    return render_template('admin/story_form.html', form_title="Create New Story")
-
-@app.route('/admin/stories/<int:story_id>/edit', methods=['GET', 'POST'])
-@admin_required
-def edit_story(story_id):
-    """Admin form to edit a story."""
-    conn = get_db_connection()
-    if request.method == 'POST':
-        title = request.form.get('title')
-        content = request.form.get('content')
-        author = request.form.get('author')
-        image_file = request.files.get('image')
-
-        # Get current image filename
-        current_filename = conn.execute('SELECT image_filename FROM stories WHERE id = ?', (story_id,)).fetchone()['image_filename']
-
-        image_filename = current_filename
-        if image_file and image_file.filename != '':
-            image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-
-        conn.execute(
-            'UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?',
-            (title, content, author, image_filename, story_id)
-        )
-        conn.commit()
-        conn.close()
-        flash('Story updated successfully!', 'success')
-        return redirect(url_for('admin_list_stories'))
-
-    story = conn.execute('SELECT * FROM stories WHERE id = ?', (story_id,)).fetchone()
-    conn.close()
-    return render_template('admin/story_form.html', story=story, form_title="Edit Story")
-
-@app.route('/admin/stories/<int:story_id>/delete', methods=['POST'])
-@admin_required
-def delete_story(story_id):
-    """Deletes a story."""
-    conn = get_db_connection()
-    conn.execute('DELETE FROM stories WHERE id = ?', (story_id,))
-    conn.commit()
-    conn.close()
-    flash('Story deleted successfully.', 'success')
-    return redirect(url_for('admin_list_stories'))
 
 # --- CONTEXT PROCESSOR ---
 @app.context_processor
@@ -1040,11 +943,6 @@ def inject_announcement():
         with open(announcement_file, 'r') as f:
             announcement = f.read().strip()
     return dict(announcement=announcement)
-
-# --- MAIN EXECUTION ---
-
-#if __name__ == '__main__':
-#    app.run(debug=True)
 
 # --- ERROR HANDLERS ---
 @app.errorhandler(404)
