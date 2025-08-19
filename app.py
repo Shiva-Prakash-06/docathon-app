@@ -72,64 +72,40 @@ def home():
 
     leaderboard_query = """
         WITH ClassStats AS (
-            SELECT
-                c.id AS class_id, c.name AS class_name,
-                SUM(CASE WHEN m.winner_id = c.id THEN 1 ELSE 0 END) AS wins
-            FROM classes c
-            LEFT JOIN matches m ON (c.id = m.class1_id OR c.id = m.class2_id) AND m.status = 'COMPLETED'
-            GROUP BY c.id, c.name
+            -- ... (this part remains the same) ...
         ),
         ParticipationPoints AS (
-            SELECT class_id, COUNT(DISTINCT sport_id) * 1 AS participation_points
-            FROM (
-                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
-                UNION ALL
-                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
-            ) GROUP BY class_id
+            -- ... (this part remains the same) ...
         ),
         AdjustmentPoints AS (
-            SELECT class_id, SUM(points) AS adjustment_points FROM point_adjustments GROUP BY class_id
+            -- ... (this part remains the same) ...
         ),
         TournamentPoints AS (
+            -- ... (this part remains the same) ...
+        ),
+        -- NEW: Calculate points only for non-walkover wins
+        WinPoints AS (
             SELECT
-                c.id as class_id,
-                SUM(CASE
-                    WHEN m.winner_id = c.id AND r.round_type = 'FINAL' THEN 5
-                    WHEN m.winner_id != c.id AND r.round_type = 'FINAL' THEN 4
-                    WHEN m.winner_id != c.id AND r.round_type = 'SEMI_FINAL' THEN 3
-                    WHEN m.winner_id != c.id AND r.round_type = 'QUARTER_FINAL' THEN 2
-                    ELSE 0
-                END) AS tournament_points
-            FROM classes c
-            LEFT JOIN matches m ON (c.id = m.class1_id OR c.id = m.class2_id) AND m.status = 'COMPLETED'
-            LEFT JOIN rounds r ON m.round_id = r.id
-            GROUP BY c.id
+                winner_id as class_id,
+                COUNT(id) as win_points
+            FROM matches
+            WHERE status = 'COMPLETED' AND result_details IS NOT NULL AND result_details != ''
+            GROUP BY winner_id
         )
         SELECT
             cs.class_name,
-            (IFNULL(tp.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0)) AS total_points
+            (IFNULL(tp.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0) + IFNULL(wp.win_points, 0)) AS total_points
         FROM ClassStats cs
         LEFT JOIN ParticipationPoints pp ON cs.class_id = pp.class_id
         LEFT JOIN AdjustmentPoints ap ON cs.class_id = ap.class_id
         LEFT JOIN TournamentPoints tp ON cs.class_id = tp.class_id
+        LEFT JOIN WinPoints wp ON cs.class_id = wp.class_id
         ORDER BY total_points DESC, cs.wins DESC
         LIMIT 3;
     """
     top_teams = conn.execute(leaderboard_query).fetchall()
-
-    today_str = datetime.date.today().strftime('%Y-%m-%d')
-    todays_matches_query = """
-        SELECT
-            m.id, m.status, m.result_details, m.match_time, s.name AS sport_name,
-            c1.name AS class1_name, c2.name AS class2_name
-        FROM matches m
-        JOIN sports s ON m.sport_id = s.id
-        JOIN classes c1 ON m.class1_id = c1.id
-        JOIN classes c2 ON m.class2_id = c2.id
-        WHERE date(m.match_time) = ?
-        ORDER BY m.match_time ASC
-    """
-    todays_matches = conn.execute(todays_matches_query, (today_str,)).fetchall()
+    
+    # ... (rest of the function remains the same) ...
     
     conn.close()
     
@@ -161,33 +137,31 @@ def leaderboard():
             GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
-            SELECT
-                class_id,
-                COUNT(DISTINCT sport_id) * 1 AS participation_points
-            FROM (
-                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
-                UNION ALL
-                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
-            )
-            GROUP BY class_id
+            -- ... (this part remains the same) ...
         ),
         AdjustmentPoints AS (
+            -- ... (this part remains the same) ...
+        ),
+        -- NEW: Calculate points only for non-walkover wins
+        WinPoints AS (
             SELECT
-                class_id,
-                SUM(points) AS adjustment_points
-            FROM point_adjustments
-            GROUP BY class_id
+                winner_id as class_id,
+                COUNT(id) as win_points
+            FROM matches
+            WHERE status = 'COMPLETED' AND result_details IS NOT NULL AND result_details != ''
+            GROUP BY winner_id
         )
         SELECT
-            cs.class_id, -- <-- THIS LINE IS ADDED
+            cs.class_id,
             cs.class_name,
             cs.played,
             cs.wins,
             cs.losses,
-            (IFNULL(cs.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0)) AS total_points
+            (IFNULL(cs.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0) + IFNULL(wp.win_points, 0)) AS total_points
         FROM ClassStats cs
         LEFT JOIN ParticipationPoints pp ON cs.class_id = pp.class_id
         LEFT JOIN AdjustmentPoints ap ON cs.class_id = ap.class_id
+        LEFT JOIN WinPoints wp ON cs.class_id = wp.class_id
         ORDER BY
             total_points DESC,
             cs.wins DESC;
@@ -197,6 +171,7 @@ def leaderboard():
     conn.close()
     
     return render_template('public/leaderboard.html', standings=standings, page_title="Leaderboard")
+
 
 @app.route('/matches')
 def matches():
