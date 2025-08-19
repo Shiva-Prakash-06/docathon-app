@@ -6,5 +6,5 @@ import os
 # export ADMIN_PASSCODE='your_chosen_admin_password'
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'default-secret-key-for-dev')
-ADMIN_PASSCODE = os.environ.get('ADMIN_PASSCODE', 'admin123') # Default for easy startup
+ADMIN_PASSCODE = os.environ.get('ADMIN_PASSCODE', 'docathon@2025')
 TIMEZONE = 'Asia/Kolkata'
