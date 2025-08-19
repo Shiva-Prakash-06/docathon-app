@@ -10,7 +10,8 @@ from werkzeug.utils import secure_filename
 # --- APP SETUP ---
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
-app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+app.config['UPLOAD_FOLDER'] = os.path.join(APP_ROOT, 'static', 'uploads')
 
 
 # --- CONFIGURATION & HELPERS ---
@@ -377,7 +378,8 @@ def about():
 def list_stories():
     """Displays a list of all trending stories."""
     conn = get_db_connection()
-    stories = conn.execute('SELECT * FROM stories ORDER BY created_at DESC').fetchall()
+    # CORRECTED: The query now selects the image_filename
+    stories = conn.execute('SELECT id, title, content, author, image_filename FROM stories ORDER BY created_at DESC').fetchall()
     conn.close()
     return render_template('public/list_stories.html', stories=stories, page_title="Trending Stories")
 
@@ -385,7 +387,8 @@ def list_stories():
 def view_story(story_id):
     """Displays a single story."""
     conn = get_db_connection()
-    story = conn.execute('SELECT * FROM stories WHERE id = ?', (story_id,)).fetchone()
+    # CORRECTED: The query now selects the image_filename
+    story = conn.execute('SELECT id, title, content, author, image_filename FROM stories WHERE id = ?', (story_id,)).fetchone()
     conn.close()
     if story is None:
         return redirect(url_for('list_stories'))
@@ -488,16 +491,32 @@ def admin_list_stories():
 def create_story():
     """Admin form to create a new story."""
     if request.method == 'POST':
+        print("--- CREATE STORY (POST) ---")
         title = request.form.get('title')
-        content = request.form.get('content')
-        author = request.form.get('author')
         image_file = request.files.get('image')
         
-        image_filename = None
+        print(f"Title received: {title}")
+        print(f"Image file object: {image_file}")
+
         if image_file and image_file.filename != '':
             image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
+            print(f"Image filename: {image_filename}")
+            print(f"Attempting to save to: {save_path}")
+            try:
+                image_file.save(save_path)
+                print("SUCCESS: File saved.")
+            except Exception as e:
+                print(f"ERROR saving file: {e}")
+                
+            # ... (the rest of the function)
+        else:
+            image_filename = None
+            print("No image file provided.")
 
+        # ... (rest of the function)
+        content = request.form.get('content')
+        author = request.form.get('author')
         conn = get_db_connection()
         conn.execute(
             'INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)',
@@ -507,7 +526,7 @@ def create_story():
         conn.close()
         flash('Story created successfully!', 'success')
         return redirect(url_for('admin_list_stories'))
-        
+            
     return render_template('admin/story_form.html', form_title="Create New Story")
 
 @app.route('/admin/stories/<int:story_id>/edit', methods=['GET', 'POST'])
@@ -516,18 +535,32 @@ def edit_story(story_id):
     """Admin form to edit a story."""
     conn = get_db_connection()
     if request.method == 'POST':
+        print("--- EDIT STORY (POST) ---")
         title = request.form.get('title')
-        content = request.form.get('content')
-        author = request.form.get('author')
         image_file = request.files.get('image')
 
+        print(f"Title received: {title}")
+        print(f"Image file object: {image_file}")
+        
         current_filename = conn.execute('SELECT image_filename FROM stories WHERE id = ?', (story_id,)).fetchone()['image_filename']
-
         image_filename = current_filename
+
         if image_file and image_file.filename != '':
             image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
+            print(f"Image filename: {image_filename}")
+            print(f"Attempting to save to: {save_path}")
+            try:
+                image_file.save(save_path)
+                print("SUCCESS: File saved.")
+            except Exception as e:
+                print(f"ERROR saving file: {e}")
+        else:
+            print("No new image file provided.")
         
+        # ... (the rest of the function)
+        content = request.form.get('content')
+        author = request.form.get('author')
         conn.execute(
             'UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?',
             (title, content, author, image_filename, story_id)
