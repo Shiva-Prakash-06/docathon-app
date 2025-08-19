@@ -268,6 +268,7 @@ def match_details(match_id):
     """Displays a detailed view of a single match, including its score log."""
     conn = get_db_connection()
     
+    # Ensure scorecard_url is selected
     match = conn.execute("""
         SELECT m.*, s.name as sport_name, r.name as round_name, c1.name as class1_name, c2.name as class2_name
         FROM matches m
@@ -735,6 +736,7 @@ def edit_match(match_id):
         result_details = request.form.get('result_details')
         winner_id = request.form.get('winner_id')
         notes = request.form.get('notes')
+        scorecard_url = request.form.get('scorecard_url')
 
         if status == 'COMPLETED' and not winner_id:
             flash('You must select a winner for a completed match.', 'danger')
@@ -744,8 +746,8 @@ def edit_match(match_id):
             winner_id = None
         
         conn.execute(
-            'UPDATE matches SET status = ?, winner_id = ?, notes = ?, result_details = ? WHERE id = ?',
-            (status, winner_id, notes, result_details, match_id)
+            'UPDATE matches SET status = ?, winner_id = ?, notes = ?, result_details = ?, scorecard_url = ? WHERE id = ?',
+            (status, winner_id, notes, result_details, scorecard_url, match_id)
         )
         conn.commit()
         conn.close()

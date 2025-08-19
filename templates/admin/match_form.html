@@ -87,6 +87,11 @@
                 <label for="notes" class="form-label">Notes (Optional)</label>
                 <textarea class="form-control" id="notes" name="notes" rows="3">{{ match.notes or '' }}</textarea>
             </div>
+            <div class="mb-3">
+                <label for="scorecard_url" class="form-label">External Scorecard URL (Optional)</label>
+                <input type="url" class="form-control" name="scorecard_url" id="scorecard_url" value="{{ match.scorecard_url or '' }}" placeholder="https://...">
+                <div class="form-text">For cricket matches, add a link to the full live scorecard here.</div>
+            </div>
             {% endif %}
             
             <div class="d-flex justify-content-end">

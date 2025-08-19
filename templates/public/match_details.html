@@ -48,6 +48,11 @@
             <p class="h5 fw-bold text-info">{{ match.result_details }}</p>
         </div>
         {% endif %}
+        {% if match.scorecard_url %}
+        <div class="text-center mt-3">
+            <a href="{{ match.scorecard_url }}" class="btn btn-outline-warning" target="_blank">View Full Scorecard</a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
