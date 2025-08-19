@@ -15,14 +15,13 @@ app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 
 # --- CONFIGURATION & HELPERS ---
 
-# Updated button configuration with run-out buttons
 SPORT_BUTTON_CONFIG = {
-    'default': [{'label': '+1', 'points': 1, 'type': 'Point', 'counts_as_ball': 0}],
+    'default': [{'label': '+1', 'points': 1, 'type': 'Point', 'counts_as_ball': 0, 'isComplex': False}],
     'Cricket Boys': [
         {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
-        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False}, # <-- ADD THIS LINE
+        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
         {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0, 'isComplex': True},
@@ -33,7 +32,7 @@ SPORT_BUTTON_CONFIG = {
         {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
-        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False}, # <-- ADD THIS LINE
+        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+4', 'points': 4, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+6', 'points': 6, 'type': 'Boundary', 'counts_as_ball': 1, 'isComplex': False},
         {'label': 'Wd', 'points': 1, 'type': 'Wide', 'counts_as_ball': 0, 'isComplex': True},
@@ -41,14 +40,14 @@ SPORT_BUTTON_CONFIG = {
         {'label': 'W', 'points': 0, 'type': 'Wicket', 'counts_as_ball': 1, 'isComplex': True},
     ],
     'Basketball (B)': [
-        {'label': '+1', 'points': 1, 'type': 'Freethrow', 'counts_as_ball': 0},
-        {'label': '+2', 'points': 2, 'type': 'Shot', 'counts_as_ball': 0},
-        {'label': '+3', 'points': 3, 'type': 'Shot', 'counts_as_ball': 0},
+        {'label': '+1', 'points': 1, 'type': 'Freethrow', 'counts_as_ball': 0, 'isComplex': False},
+        {'label': '+2', 'points': 2, 'type': 'Shot', 'counts_as_ball': 0, 'isComplex': False},
+        {'label': '+3', 'points': 3, 'type': 'Shot', 'counts_as_ball': 0, 'isComplex': False},
     ],
     'Basketball (G)': [
-        {'label': '+1', 'points': 1, 'type': 'Freethrow', 'counts_as_ball': 0},
-        {'label': '+2', 'points': 2, 'type': 'Shot', 'counts_as_ball': 0},
-        {'label': '+3', 'points': 3, 'type': 'Shot', 'counts_as_ball': 0},
+        {'label': '+1', 'points': 1, 'type': 'Freethrow', 'counts_as_ball': 0, 'isComplex': False},
+        {'label': '+2', 'points': 2, 'type': 'Shot', 'counts_as_ball': 0, 'isComplex': False},
+        {'label': '+3', 'points': 3, 'type': 'Shot', 'counts_as_ball': 0, 'isComplex': False},
     ],
 }
 
