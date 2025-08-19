@@ -391,6 +391,60 @@ def view_story(story_id):
         return redirect(url_for('list_stories'))
     return render_template('public/view_story.html', story=story, page_title=story['title'])
 
+@app.route('/class-log/<int:class_id>')
+def class_points_log(class_id):
+    """Displays a detailed points breakdown for a single class."""
+    conn = get_db_connection()
+    
+    # Get class name
+    class_info = conn.execute('SELECT name FROM classes WHERE id = ?', (class_id,)).fetchone()
+    if class_info is None:
+        return redirect(url_for('leaderboard'))
+
+    # 1. Get Tournament Points
+    tournament_events = conn.execute("""
+        SELECT m.id, s.name as sport_name, r.round_type,
+            CASE
+                WHEN m.winner_id = ? AND r.round_type = 'FINAL' THEN 5
+                WHEN m.winner_id != ? AND r.round_type = 'FINAL' THEN 4
+                WHEN m.winner_id != ? AND r.round_type = 'SEMI_FINAL' THEN 3
+                WHEN m.winner_id != ? AND r.round_type = 'QUARTER_FINAL' THEN 2
+                ELSE 0
+            END AS points,
+            CASE
+                WHEN m.winner_id = ? THEN 'Won'
+                ELSE 'Lost'
+            END AS outcome
+        FROM matches m
+        JOIN rounds r ON m.round_id = r.id
+        JOIN sports s ON m.sport_id = s.id
+        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
+          AND r.round_type IN ('FINAL', 'SEMI_FINAL', 'QUARTER_FINAL')
+          AND points > 0
+    """, (class_id, class_id, class_id, class_id, class_id, class_id, class_id)).fetchall()
+
+    # 2. Get Participation Points
+    participation_events = conn.execute("""
+        SELECT DISTINCT s.name as sport_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
+    """, (class_id, class_id)).fetchall()
+
+    # 3. Get Manual Adjustments
+    adjustments = conn.execute(
+        'SELECT points, reason FROM point_adjustments WHERE class_id = ? ORDER BY created_at DESC', (class_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return render_template('public/class_points_log.html',
+                           class_name=class_info['name'],
+                           tournament_events=tournament_events,
+                           participation_events=participation_events,
+                           adjustments=adjustments,
+                           page_title=f"Points Log for {class_info['name']}")
+
 
 # --- ADMIN AUTH ROUTES ---
 
