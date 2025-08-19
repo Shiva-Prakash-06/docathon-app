@@ -70,22 +70,46 @@ def home():
     """Renders a dynamic public landing page."""
     conn = get_db_connection()
 
+    # Query for the Top 3 on the leaderboard
     leaderboard_query = """
         WITH ClassStats AS (
-            -- ... (this part remains the same) ...
+            SELECT
+                c.id AS class_id, c.name AS class_name,
+                SUM(CASE WHEN m.winner_id = c.id THEN 1 ELSE 0 END) AS wins
+            FROM classes c
+            LEFT JOIN matches m ON (c.id = m.class1_id OR c.id = m.class2_id) AND m.status = 'COMPLETED'
+            GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
-            -- ... (this part remains the same) ...
+            SELECT class_id, COUNT(DISTINCT sport_id) * 1 AS participation_points
+            -- THIS SUBQUERY IS NOW CORRECTED WITH an ALIAS 't'
+            FROM (
+                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                UNION ALL
+                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+            ) t
+            GROUP BY class_id
         ),
         AdjustmentPoints AS (
-            -- ... (this part remains the same) ...
+            SELECT class_id, SUM(points) AS adjustment_points FROM point_adjustments GROUP BY class_id
         ),
         TournamentPoints AS (
-            -- ... (this part remains the same) ...
-        ),
-        -- NEW: Calculate points only for non-walkover wins
-        WinPoints AS (
             SELECT
+                c.id as class_id,
+                SUM(CASE
+                    WHEN m.winner_id = c.id AND r.round_type = 'FINAL' THEN 5
+                    WHEN m.winner_id != c.id AND r.round_type = 'FINAL' THEN 4
+                    WHEN m.winner_id != c.id AND r.round_type = 'SEMI_FINAL' THEN 3
+                    WHEN m.winner_id != c.id AND r.round_type = 'QUARTER_FINAL' THEN 2
+                    ELSE 0
+                END) AS tournament_points
+            FROM classes c
+            LEFT JOIN matches m ON (c.id = m.class1_id OR c.id = m.class2_id) AND m.status = 'COMPLETED'
+            LEFT JOIN rounds r ON m.round_id = r.id
+            GROUP BY c.id
+        ),
+        WinPoints AS (
+             SELECT
                 winner_id as class_id,
                 COUNT(id) as win_points
             FROM matches
@@ -104,8 +128,21 @@ def home():
         LIMIT 3;
     """
     top_teams = conn.execute(leaderboard_query).fetchall()
-    
-    # ... (rest of the function remains the same) ...
+
+    # Query for today's matches (this part is unchanged)
+    today_str = datetime.date.today().strftime('%Y-%m-%d')
+    todays_matches_query = """
+        SELECT
+            m.id, m.status, m.result_details, m.match_time, s.name AS sport_name,
+            c1.name AS class1_name, c2.name AS class2_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        JOIN classes c1 ON m.class1_id = c1.id
+        JOIN classes c2 ON m.class2_id = c2.id
+        WHERE date(m.match_time) = ?
+        ORDER BY m.match_time ASC
+    """
+    todays_matches = conn.execute(todays_matches_query, (today_str,)).fetchall()
     
     conn.close()
     
