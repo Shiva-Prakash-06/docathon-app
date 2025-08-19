@@ -938,6 +938,28 @@ def log_complex_event():
         'new_wickets': new_stats['wickets'], 'new_overs': new_stats['overs'], 'new_balls': new_stats['balls']
     })
 
+@app.route('/admin/matches/<int:match_id>/log-event', methods=['POST'])
+@admin_required
+def log_manual_event(match_id):
+    """Logs a manual, non-scoring event from the HTML form."""
+    # Reads from request.form to handle form-data
+    team_id = request.form.get('team_id')
+    event_description = request.form.get('event_description')
+
+    if not all([team_id, event_description]):
+        flash('Team and event description are required.', 'danger')
+    else:
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
+            (match_id, team_id, 0, event_description, 0)
+        )
+        conn.commit()
+        conn.close()
+        flash('Event logged successfully!', 'success')
+    
+    return redirect(url_for('live_score_editor', match_id=match_id))
+
 @app.route('/admin/matches/<int:match_id>/finalize', methods=['POST'])
 @admin_required
 def finalize_match(match_id):
