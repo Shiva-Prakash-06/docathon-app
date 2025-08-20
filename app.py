@@ -788,6 +788,7 @@ def delete_match(match_id):
 @app.route('/admin/matches/<int:match_id>/walkover', methods=['POST'])
 @admin_required
 def declare_walkover(match_id):
+    """Handles the logic for a walkover."""
     loser_id = request.form.get('loser_id')
     
     if not loser_id:
@@ -804,9 +805,13 @@ def declare_walkover(match_id):
     loser_name = conn.execute('SELECT name FROM classes WHERE id = ?', (loser_id,)).fetchone()['name']
     sport_name = conn.execute('SELECT name FROM sports WHERE id = ?', (match['sport_id'],)).fetchone()['name']
     
+    # NEW: Create the result string to be displayed
+    result_details = f"{winner_name} won by Walkover"
+    
+    # Update the match to include the new result_details
     conn.execute(
-        'UPDATE matches SET status = ?, winner_id = ? WHERE id = ?',
-        ('COMPLETED', winner_id, match_id)
+        'UPDATE matches SET status = ?, winner_id = ?, result_details = ? WHERE id = ?',
+        ('COMPLETED', winner_id, result_details, match_id)
     )
 
     reason = f"Walkover in {sport_name} vs {winner_name}"
@@ -819,6 +824,7 @@ def declare_walkover(match_id):
     conn.close()
     
     flash(f"{loser_name} recorded with a walkover. -3 points applied.", 'success')
+    return redirect(url_for('list_matches'))
     return redirect(url_for('list_matches'))
 
 @app.route('/admin/adjustments', methods=['GET', 'POST'])
