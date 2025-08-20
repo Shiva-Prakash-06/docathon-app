@@ -8,7 +8,7 @@
 </div>
 
 <div class="row g-4">
-    <div class="col-md-4">
+    <div class="col-md-6 col-lg-3">
         <h4>Tournament Points</h4>
         <ul class="list-group">
             {% for event in tournament_events %}
@@ -22,7 +22,21 @@
         </ul>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-6 col-lg-3">
+        <h4>Win Points</h4>
+        <ul class="list-group">
+            {% for event in win_points_events %}
+            <li class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between align-items-center">
+                <span>Won {{ event.sport_name }} vs {{ event.opponent_name }}</span>
+                <span class="badge bg-success rounded-pill">+1</span>
+            </li>
+            {% else %}
+            <li class="list-group-item bg-dark text-white border-secondary">No regular win points yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
         <h4>Participation Points</h4>
         <ul class="list-group">
             {% for event in participation_events %}
@@ -36,7 +50,7 @@
         </ul>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-6 col-lg-3">
         <h4>Bonuses & Penalties</h4>
         <ul class="list-group">
             {% for adj in adjustments %}

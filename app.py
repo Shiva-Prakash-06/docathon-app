@@ -400,14 +400,13 @@ def class_points_log(class_id):
     """Displays a detailed points breakdown for a single class."""
     conn = get_db_connection()
     
-    # Get class name
     class_info = conn.execute('SELECT name FROM classes WHERE id = ?', (class_id,)).fetchone()
     if class_info is None:
         return redirect(url_for('leaderboard'))
 
     # 1. Get Tournament Points
     tournament_events = conn.execute("""
-        SELECT m.id, s.name as sport_name, r.round_type,
+        SELECT s.name as sport_name, r.round_type,
             CASE
                 WHEN m.winner_id = ? AND r.round_type = 'FINAL' THEN 5
                 WHEN m.winner_id != ? AND r.round_type = 'FINAL' THEN 4
@@ -415,16 +414,12 @@ def class_points_log(class_id):
                 WHEN m.winner_id != ? AND r.round_type = 'QUARTER_FINAL' THEN 2
                 ELSE 0
             END AS points,
-            CASE
-                WHEN m.winner_id = ? THEN 'Won'
-                ELSE 'Lost'
-            END AS outcome
+            CASE WHEN m.winner_id = ? THEN 'Won' ELSE 'Lost' END AS outcome
         FROM matches m
         JOIN rounds r ON m.round_id = r.id
         JOIN sports s ON m.sport_id = s.id
         WHERE (m.class1_id = ? OR m.class2_id = ?) AND m.status = 'COMPLETED'
-          AND r.round_type IN ('FINAL', 'SEMI_FINAL', 'QUARTER_FINAL')
-          AND points > 0
+          AND r.round_type IN ('FINAL', 'SEMI_FINAL', 'QUARTER_FINAL') AND points > 0
     """, (class_id, class_id, class_id, class_id, class_id, class_id, class_id)).fetchall()
 
     # 2. Get Participation Points
@@ -440,6 +435,21 @@ def class_points_log(class_id):
         'SELECT points, reason FROM point_adjustments WHERE class_id = ? ORDER BY created_at DESC', (class_id,)
     ).fetchall()
 
+    # 4. Get Regular Win Points (+1 per win, excluding walkovers)
+    win_points_events = conn.execute("""
+        SELECT s.name as sport_name, c2.name as opponent_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        JOIN classes c2 ON m.class2_id = c2.id
+        WHERE m.winner_id = ? AND m.class1_id = ? AND m.result_details IS NOT NULL AND m.result_details != ''
+        UNION ALL
+        SELECT s.name as sport_name, c1.name as opponent_name
+        FROM matches m
+        JOIN sports s ON m.sport_id = s.id
+        JOIN classes c1 ON m.class1_id = c1.id
+        WHERE m.winner_id = ? AND m.class2_id = ? AND m.result_details IS NOT NULL AND m.result_details != ''
+    """, (class_id, class_id, class_id, class_id)).fetchall()
+
     conn.close()
 
     return render_template('public/class_points_log.html',
@@ -447,6 +457,7 @@ def class_points_log(class_id):
                            tournament_events=tournament_events,
                            participation_events=participation_events,
                            adjustments=adjustments,
+                           win_points_events=win_points_events, # Pass new data to template
                            page_title=f"Points Log for {class_info['name']}")
 
 
