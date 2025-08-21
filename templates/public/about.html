@@ -8,24 +8,30 @@
 
 <div class="row justify-content-center">
     <div class="col-lg-8">
-        <p class="fs-5">
+        <div class="fs-5">
             <h4><strong>OVERVIEW</strong></h4>
-            DOCATHON is the central sports body of the Department of Commerce, focusing on organizing intra-class and inter-department sports events that build team spirit, leadership, and a culture of unity among students. With the 2025–2026 edition, DOCATHON is committed to building not just athletes but a community where physical fitness, mental wellness, and social responsibility merge into a transformative student experience.
-        </p>
+            <p>
+                DOCATHON is the central sports body of the Department of Commerce, focusing on organizing intra-class and inter-department sports events that build team spirit, leadership, and a culture of unity among students. With the 2025–2026 edition, DOCATHON is committed to building not just athletes but a community where physical fitness, mental wellness, and social responsibility merge into a transformative student experience.
+            </p>
+        </div>
         <br>
-        <p>
+        <div>
             <h5><strong>Our mission</strong></h5>
-            We aim to foster a vibrant sports culture that builds leadership, team spirit, sportsmanship, and unity across classes.
-        </p>
+            <p>
+                We aim to foster a vibrant sports culture that builds leadership, team spirit, sportsmanship, and unity across classes.
+            </p>
+        </div>
         <br>
-        <p>
+        <div>
             <h5><strong>Our vision</strong></h5>
-            To cultivate a cohesive community where every student feels empowered to engage in sports, promoting not only physical well-being but also camaraderie and a sense of belonging within the department.
-        </p>
+            <p>
+                To cultivate a cohesive community where every student feels empowered to engage in sports, promoting not only physical well-being but also camaraderie and a sense of belonging within the department.
+            </p>
+        </div>
 
         <h3 class="mt-5 border-bottom pb-2">Our Theme</h3>
-        <p>
-            <h4><strong><center>MAIN THEME: MENTAL HEALTH AWARENESS</center></strong></h4>
+        <div>
+            <h4><center><strong>MAIN THEME: MENTAL HEALTH AWARENESS</strong></center></h4>
             <strong>Sport-wise Themes</strong>
             <ul>
                 <li>Cricket → Depression & Anxiety</li>
@@ -37,12 +43,34 @@
                 <li>Chess → Eating Disorders & Body Image (PCOD & PCOS)</li>
                 <li>Carrom Board → Loneliness & Social Isolation</li>
             </ul>
-        </p>
+        </div>
         
-        <h3 class="mt-5 border-bottom pb-2">Our Team</h3>
-        <p>
+        <h3 class="mt-5 border-bottom pb-2 text-center">Our Team</h3>
+        <p class="text-center">
             This event is made possible by the dedicated faculty and student members of the Docathon Club.
         </p>
     </div>
+</div>
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 mt-4">
+    {% for member in members %}
+    <div class="col text-center">
+        <div class="card h-100 bg-dark">
+            {% if member.photo_filename %}
+                <img src="{{ url_for('static', filename='uploads/' + member.photo_filename) }}" class="card-img-top" alt="{{ member.name }}" style="height: 250px; object-fit: cover;">
+            {% else %}
+                <img src="https://via.placeholder.com/250" class="card-img-top" alt="Placeholder">
+            {% endif %}
+            <div class="card-body">
+                <h5 class="card-title">{{ member.name }}</h5>
+                <p class="card-text text-warning">{{ member.role }}</p>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <p class="text-center">Team members will be listed here soon.</p>
+    </div>
+    {% endfor %}
 </div>
 {% endblock %}

@@ -1061,6 +1061,92 @@ def undo_last_event(match_id):
     conn.close()
     return redirect(url_for('live_score_editor', match_id=match_id))
 
+# --- ADD THIS TO THE "ADMIN CONTENT MANAGEMENT" SECTION ---
+
+@app.route('/admin/team')
+@admin_required
+def admin_list_members():
+    """Admin page to list and manage team members."""
+    conn = get_db_connection()
+    members = conn.execute('SELECT * FROM team_members ORDER BY name').fetchall()
+    conn.close()
+    return render_template('admin/list_members_admin.html', members=members)
+
+@app.route('/admin/team/new', methods=['GET', 'POST'])
+@admin_required
+def create_member():
+    """Admin form to create a new team member."""
+    if request.method == 'POST':
+        name = request.form.get('name')
+        role = request.form.get('role')
+        photo_file = request.files.get('photo')
+        
+        photo_filename = None
+        if photo_file and photo_file.filename != '':
+            photo_filename = secure_filename(photo_file.filename)
+            photo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], photo_filename))
+
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO team_members (name, role, photo_filename) VALUES (?, ?, ?)',
+            (name, role, photo_filename)
+        )
+        conn.commit()
+        conn.close()
+        flash('Team member added successfully!', 'success')
+        return redirect(url_for('admin_list_members'))
+        
+    return render_template('admin/member_form.html', form_title="Add New Member")
+
+@app.route('/admin/team/<int:member_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_member(member_id):
+    """Admin form to edit a team member."""
+    conn = get_db_connection()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        role = request.form.get('role')
+        photo_file = request.files.get('photo')
+
+        current_filename = conn.execute('SELECT photo_filename FROM team_members WHERE id = ?', (member_id,)).fetchone()['photo_filename']
+
+        photo_filename = current_filename
+        if photo_file and photo_file.filename != '':
+            photo_filename = secure_filename(photo_file.filename)
+            photo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], photo_filename))
+        
+        conn.execute(
+            'UPDATE team_members SET name = ?, role = ?, photo_filename = ? WHERE id = ?',
+            (name, role, photo_filename, member_id)
+        )
+        conn.commit()
+        conn.close()
+        flash('Team member updated successfully!', 'success')
+        return redirect(url_for('admin_list_members'))
+
+    member = conn.execute('SELECT * FROM team_members WHERE id = ?', (member_id,)).fetchone()
+    conn.close()
+    return render_template('admin/member_form.html', member=member, form_title="Edit Team Member")
+
+@app.route('/admin/team/<int:member_id>/delete', methods=['POST'])
+@admin_required
+def delete_member(member_id):
+    """Deletes a team member."""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM team_members WHERE id = ?', (member_id,))
+    conn.commit()
+    conn.close()
+    flash('Team member deleted successfully.', 'success')
+    return redirect(url_for('admin_list_members'))
+
+@app.route('/about')
+def about():
+    """Renders the about us page."""
+    conn = get_db_connection()
+    members = conn.execute('SELECT * FROM team_members ORDER BY name').fetchall()
+    conn.close()
+    return render_template('public/about.html', members=members, page_title="About Us")
+
 # --- CONTEXT PROCESSOR ---
 @app.context_processor
 def inject_announcement():
