@@ -250,7 +250,7 @@ def matches():
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
         
-    query += " ORDER BY m.match_time ASC"
+    query += " ORDER BY m.match_time DESC"
     
     all_matches = conn.execute(query, params).fetchall()
     
