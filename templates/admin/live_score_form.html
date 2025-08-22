@@ -2,6 +2,16 @@
 {% set page_title = "Live Score: " + match.sport_name %}
 
 {% block content %}
+<style>
+    .score-controls .btn-group {
+        display: flex;
+        flex-wrap: wrap; /* Allows buttons to wrap to the next line */
+        justify-content: center;
+    }
+    .score-controls .btn {
+        margin: 4px; /* Adds spacing between buttons */
+    }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
@@ -49,7 +59,7 @@
         </div>
         <hr class="my-4">
         <div class="row text-center">
-            <div class="col-6 border-end border-secondary">
+            <div class="col-6 border-end border-secondary score-controls">
                 <h4 class="mb-3">Score for {{ match.class1_name }}</h4>
                 <div class="btn-group" role="group" id="team-{{ match.class1_id }}-controls">
                     {% for button in buttons %}
@@ -62,7 +72,7 @@
                     {% endfor %}
                 </div>
             </div>
-            <div class="col-6">
+            <div class="col-6 score-controls">
                 <h4 class="mb-3">Score for {{ match.class2_name }}</h4>
                 <div class="btn-group" role="group" id="team-{{ match.class2_id }}-controls">
                     {% for button in buttons %}
@@ -106,12 +116,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     const matchId = {{ match.id }};
     const isCricket = {{ is_cricket|tojson }};
-    let activeComplexEvent = null; // Holds the first-click event data
+    let activeComplexEvent = null;
 
     const runButtons = [
         {'label': '+0', 'points': 0, 'type': 'Runs', 'counts_as_ball': 1},
         {'label': '+1', 'points': 1, 'type': 'Runs', 'counts_as_ball': 1},
         {'label': '+2', 'points': 2, 'type': 'Runs', 'counts_as_ball': 1},
+        {'label': '+3', 'points': 3, 'type': 'Runs', 'counts_as_ball': 1},
         {'label': '+4', 'points': 4, 'type': 'Runs', 'counts_as_ball': 1},
         {'label': '+6', 'points': 6, 'type': 'Runs', 'counts_as_ball': 1},
     ];
@@ -143,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function resetControls(teamId) {
         const controlDiv = document.getElementById(`team-${teamId}-controls`);
-        controlDiv.innerHTML = ''; // Clear current buttons
+        controlDiv.innerHTML = '';
         const originalButtons = {{ buttons|tojson }};
         originalButtons.forEach(buttonData => {
             const button = document.createElement('button');
@@ -155,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             controlDiv.appendChild(button);
         });
         activeComplexEvent = null;
-        addEventListenersToButtons(); // Re-attach listeners to new buttons
+        addEventListenersToButtons();
     }
 
     function showRunButtons(teamId, baseEvent) {
@@ -205,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    addEventListenersToButtons(); // Initial setup
+    addEventListenersToButtons();
 });
 </script>
 {% endblock %}
