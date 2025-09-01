@@ -82,9 +82,11 @@ def home():
         ParticipationPoints AS (
             SELECT class_id, COUNT(DISTINCT sport_id) * 1 AS participation_points
             FROM (
-                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                SELECT class1_id AS class_id, sport_id FROM matches
+                WHERE status = 'COMPLETED' AND result_details NOT LIKE '%Walkover%'
                 UNION ALL
-                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                SELECT class2_id AS class_id, sport_id FROM matches
+                WHERE status = 'COMPLETED' AND result_details NOT LIKE '%Walkover%'
             ) t
             GROUP BY class_id
         ),
@@ -145,13 +147,12 @@ def home():
 
 @app.route('/leaderboard')
 def leaderboard():
+    """Calculates and displays the public leaderboard."""
     conn = get_db_connection()
     query = """
         WITH ClassStats AS (
             SELECT
-                c.id AS class_id,
-                c.name AS class_name,
-                COUNT(m.id) AS played,
+                c.id AS class_id, c.name AS class_name, COUNT(m.id) AS played,
                 SUM(CASE WHEN m.winner_id = c.id THEN 1 ELSE 0 END) AS wins,
                 SUM(CASE WHEN m.winner_id != c.id THEN 1 ELSE 0 END) AS losses,
                 SUM(CASE
@@ -167,45 +168,33 @@ def leaderboard():
             GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
-            SELECT
-                class_id,
-                COUNT(DISTINCT sport_id) * 1 AS participation_points
+            SELECT class_id, COUNT(DISTINCT sport_id) * 1 AS participation_points
             FROM (
-                SELECT class1_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                SELECT class1_id AS class_id, sport_id FROM matches
+                WHERE status = 'COMPLETED' AND result_details NOT LIKE '%Walkover%'
                 UNION ALL
-                SELECT class2_id AS class_id, sport_id FROM matches WHERE status = 'COMPLETED'
+                SELECT class2_id AS class_id, sport_id FROM matches
+                WHERE status = 'COMPLETED' AND result_details NOT LIKE '%Walkover%'
             ) t
             GROUP BY class_id
         ),
         AdjustmentPoints AS (
-            SELECT
-                class_id,
-                SUM(points) AS adjustment_points
-            FROM point_adjustments
-            GROUP BY class_id
+            SELECT class_id, SUM(points) AS adjustment_points FROM point_adjustments GROUP BY class_id
         ),
         WinPoints AS (
-            SELECT
-                winner_id as class_id,
-                COUNT(id) as win_points
+            SELECT winner_id as class_id, COUNT(id) as win_points
             FROM matches
             WHERE status = 'COMPLETED' AND result_details IS NOT NULL AND result_details != '' AND result_details NOT LIKE '%Walkover%'
             GROUP BY winner_id
         )
         SELECT
-            cs.class_id,
-            cs.class_name,
-            cs.played,
-            cs.wins,
-            cs.losses,
+            cs.class_id, cs.class_name, cs.played, cs.wins, cs.losses,
             (IFNULL(cs.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0) + IFNULL(wp.win_points, 0)) AS total_points
         FROM ClassStats cs
         LEFT JOIN ParticipationPoints pp ON cs.class_id = pp.class_id
         LEFT JOIN AdjustmentPoints ap ON cs.class_id = ap.class_id
         LEFT JOIN WinPoints wp ON cs.class_id = wp.class_id
-        ORDER BY
-            total_points DESC,
-            cs.wins DESC;
+        ORDER BY total_points DESC, cs.wins DESC;
     """
     standings = conn.execute(query).fetchall()
     conn.close()
