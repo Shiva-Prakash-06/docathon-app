@@ -6,6 +6,7 @@ from utils.db import get_db_connection
 import datetime
 import os
 from werkzeug.utils import secure_filename
+import json
 
 # --- APP SETUP ---
 app = Flask(__name__)
@@ -16,8 +17,17 @@ app.config['UPLOAD_FOLDER'] = os.path.join(APP_ROOT, 'static', 'uploads')
 
 # --- CONFIGURATION & HELPERS ---
 
+SPORT_CONFIG = {
+    'default': {'format': 'points'},
+    'Cricket Boys': {'format': 'points'},
+    'Cricket Girls': {'format': 'points'},
+    'Basketball (B)': {'format': 'points'},
+    'Basketball (G)': {'format': 'points'},
+    'Volleyball': {'format': 'sets_detailed'},
+    'Throwball': {'format': 'sets_detailed'},
+}
+
 SPORT_BUTTON_CONFIG = {
-    'default': [{'label': '+1', 'points': 1, 'type': 'Point', 'counts_as_ball': 0, 'isComplex': False}],
     'Cricket Boys': [
         {'label': '+0', 'points': 0, 'type': 'Dot Ball', 'counts_as_ball': 1, 'isComplex': False},
         {'label': '+1', 'points': 1, 'type': 'Run', 'counts_as_ball': 1, 'isComplex': False},
@@ -53,15 +63,33 @@ SPORT_BUTTON_CONFIG = {
 }
 
 def get_live_scores(conn, match_id, team_id):
-    """Calculates all live stats for a team."""
+    """Calculates point-based scores (Cricket, Basketball)."""
     score = conn.execute('SELECT SUM(points_scored) FROM score_log WHERE match_id = ? AND team_id = ?', (match_id, team_id)).fetchone()[0] or 0
     wickets = conn.execute("SELECT COUNT(*) FROM score_log WHERE match_id = ? AND team_id = ? AND event_type = 'Wicket'", (match_id, team_id)).fetchone()[0] or 0
     balls_faced = conn.execute('SELECT SUM(counts_as_ball) FROM score_log WHERE match_id = ? AND team_id = ?', (match_id, team_id)).fetchone()[0] or 0
-    
     overs = balls_faced // 6
     balls = balls_faced % 6
-    
     return {'score': score, 'wickets': wickets, 'overs': overs, 'balls': balls}
+
+def get_set_scores(conn, match_id, class1_id, class2_id):
+    """Calculates set-based scores (Volleyball, Throwball)."""
+    completed_sets = []
+    current_set_scores = {class1_id: 0, class2_id: 0}
+    sets_won = {class1_id: 0, class2_id: 0}
+    events = conn.execute('SELECT * FROM score_log WHERE match_id = ? ORDER BY created_at ASC', (match_id,)).fetchall()
+
+    for event in events:
+        if event['event_type'] == 'Set End':
+            completed_sets.append(current_set_scores.copy())
+            if current_set_scores[class1_id] > current_set_scores[class2_id]:
+                sets_won[class1_id] += 1
+            else:
+                sets_won[class2_id] += 1
+            current_set_scores = {class1_id: 0, class2_id: 0}
+        elif event['event_type'] == 'Point':
+            current_set_scores[event['team_id']] += event['points_scored']
+
+    return {'completed_sets': completed_sets, 'current_set_scores': current_set_scores, 'sets_won': sets_won}
 
 
 # --- PUBLIC ROUTES ---
@@ -70,13 +98,12 @@ def get_live_scores(conn, match_id, team_id):
 def home():
     """Renders a dynamic public landing page."""
     conn = get_db_connection()
-    # This query is a simplified version of the main leaderboard query for the Top 3
     leaderboard_query = """
         WITH MatchParticipants AS (
-            SELECT m.id as match_id, m.sport_id, m.round_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
+            SELECT m.id as match_id, m.sport_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
             FROM matches m JOIN rounds r ON m.round_id = r.id JOIN classes c ON m.class1_id = c.id WHERE m.status = 'COMPLETED'
             UNION ALL
-            SELECT m.id as match_id, m.sport_id, m.round_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
+            SELECT m.id as match_id, m.sport_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
             FROM matches m JOIN rounds r ON m.round_id = r.id JOIN classes c ON m.class2_id = c.id WHERE m.status = 'COMPLETED'
         ),
         ClassStats AS (
@@ -90,15 +117,11 @@ def home():
                     WHEN mp.winner_id != c.id AND mp.round_type = 'QUARTER_FINAL' THEN 2
                     ELSE 0
                 END) AS tournament_points
-            FROM classes c
-            LEFT JOIN MatchParticipants mp ON c.id = mp.class_id
-            GROUP BY c.id, c.name
+            FROM classes c LEFT JOIN MatchParticipants mp ON c.id = mp.class_id GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
             SELECT class_id, COUNT(DISTINCT sport_id) AS participation_points
-            FROM MatchParticipants
-            WHERE result_details NOT LIKE '%Walkover%'
-            GROUP BY class_id
+            FROM MatchParticipants WHERE result_details NOT LIKE '%Walkover%' GROUP BY class_id
         ),
         WinPoints AS (
             SELECT winner_id as class_id, COUNT(id) as win_points
@@ -107,9 +130,7 @@ def home():
             GROUP BY winner_id
         ),
         AdjustmentPoints AS (
-            SELECT class_id, SUM(points) AS adjustment_points
-            FROM point_adjustments
-            GROUP BY class_id
+            SELECT class_id, SUM(points) AS adjustment_points FROM point_adjustments GROUP BY class_id
         )
         SELECT
             cs.class_name,
@@ -122,7 +143,7 @@ def home():
         LIMIT 3;
     """
     top_teams = conn.execute(leaderboard_query).fetchall()
-    
+
     today_str = datetime.date.today().strftime('%Y-%m-%d')
     todays_matches_query = """
         SELECT
@@ -137,34 +158,22 @@ def home():
     """
     todays_matches = conn.execute(todays_matches_query, (today_str,)).fetchall()
     conn.close()
-    
     return render_template('public/index.html', top_teams=top_teams, todays_matches=todays_matches)
 
 @app.route('/leaderboard')
 def leaderboard():
-    """Calculates and displays the public leaderboard."""
     conn = get_db_connection()
     query = """
         WITH MatchParticipants AS (
-            -- Create a unified list of each class's participation in a match
-            SELECT m.id as match_id, m.sport_id, m.round_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
-            FROM matches m
-            JOIN rounds r ON m.round_id = r.id
-            JOIN classes c ON m.class1_id = c.id
-            WHERE m.status = 'COMPLETED'
+            SELECT m.id as match_id, m.sport_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
+            FROM matches m JOIN rounds r ON m.round_id = r.id JOIN classes c ON m.class1_id = c.id WHERE m.status = 'COMPLETED'
             UNION ALL
-            SELECT m.id as match_id, m.sport_id, m.round_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
-            FROM matches m
-            JOIN rounds r ON m.round_id = r.id
-            JOIN classes c ON m.class2_id = c.id
-            WHERE m.status = 'COMPLETED'
+            SELECT m.id as match_id, m.sport_id, m.winner_id, m.result_details, r.round_type, c.id as class_id, c.name as class_name
+            FROM matches m JOIN rounds r ON m.round_id = r.id JOIN classes c ON m.class2_id = c.id WHERE m.status = 'COMPLETED'
         ),
         ClassStats AS (
-            -- Calculate all stats from the unified list
             SELECT
-                c.id AS class_id,
-                c.name AS class_name,
-                COUNT(mp.match_id) AS played,
+                c.id AS class_id, c.name AS class_name, COUNT(mp.match_id) AS played,
                 SUM(CASE WHEN mp.winner_id = c.id THEN 1 ELSE 0 END) AS wins,
                 SUM(CASE WHEN mp.winner_id IS NOT NULL AND mp.winner_id != c.id THEN 1 ELSE 0 END) AS losses,
                 SUM(CASE
@@ -174,15 +183,11 @@ def leaderboard():
                     WHEN mp.winner_id != c.id AND mp.round_type = 'QUARTER_FINAL' THEN 2
                     ELSE 0
                 END) AS tournament_points
-            FROM classes c
-            LEFT JOIN MatchParticipants mp ON c.id = mp.class_id
-            GROUP BY c.id, c.name
+            FROM classes c LEFT JOIN MatchParticipants mp ON c.id = mp.class_id GROUP BY c.id, c.name
         ),
         ParticipationPoints AS (
             SELECT class_id, COUNT(DISTINCT sport_id) AS participation_points
-            FROM MatchParticipants
-            WHERE result_details NOT LIKE '%Walkover%'
-            GROUP BY class_id
+            FROM MatchParticipants WHERE result_details NOT LIKE '%Walkover%' GROUP BY class_id
         ),
         WinPoints AS (
             SELECT winner_id as class_id, COUNT(id) as win_points
@@ -191,11 +196,8 @@ def leaderboard():
             GROUP BY winner_id
         ),
         AdjustmentPoints AS (
-            SELECT class_id, SUM(points) AS adjustment_points
-            FROM point_adjustments
-            GROUP BY class_id
+            SELECT class_id, SUM(points) AS adjustment_points FROM point_adjustments GROUP BY class_id
         )
-        -- Final Calculation
         SELECT
             cs.class_id, cs.class_name, cs.played, cs.wins, cs.losses,
             (IFNULL(cs.tournament_points, 0) + IFNULL(pp.participation_points, 0) + IFNULL(ap.adjustment_points, 0) + IFNULL(wp.win_points, 0)) AS total_points
@@ -261,11 +263,18 @@ def match_details(match_id):
         return redirect(url_for('matches'))
     scores = {}
     is_cricket = 'Cricket' in match['sport_name']
+    config = SPORT_CONFIG.get(match['sport_name'], SPORT_CONFIG['default'])
+    score_format = config['format']
+
     if match['status'] in ('LIVE', 'COMPLETED'):
-        scores = {
-            match['class1_id']: get_live_scores(conn, match_id, match['class1_id']),
-            match['class2_id']: get_live_scores(conn, match_id, match['class2_id'])
-        }
+        if score_format == 'points':
+             scores = {
+                match['class1_id']: get_live_scores(conn, match_id, match['class1_id']),
+                match['class2_id']: get_live_scores(conn, match_id, match['class2_id'])
+            }
+        elif score_format == 'sets_detailed':
+            scores = get_set_scores(conn, match_id, match['class1_id'], match['class2_id'])
+
     score_log = conn.execute("""
         SELECT sl.*, c.name as team_name
         FROM score_log sl
@@ -274,7 +283,7 @@ def match_details(match_id):
         ORDER BY sl.created_at DESC
     """, (match_id,)).fetchall()
     conn.close()
-    return render_template('public/match_details.html', match=match, score_log=score_log, scores=scores, is_cricket=is_cricket, page_title="Match Details")
+    return render_template('public/match_details.html', match=match, score_log=score_log, scores=scores, is_cricket=is_cricket, score_format=score_format, page_title="Match Details")
 
 @app.route('/api/match-scores/<int:match_id>')
 def get_match_scores_api(match_id):
@@ -292,12 +301,7 @@ def get_match_scores_api(match_id):
 @app.route('/brackets')
 def list_brackets():
     conn = get_db_connection()
-    sports_with_rounds = conn.execute("""
-        SELECT DISTINCT s.id, s.name
-        FROM sports s
-        JOIN rounds r ON s.id = r.sport_id
-        ORDER BY s.name
-    """).fetchall()
+    sports_with_rounds = conn.execute("SELECT DISTINCT s.id, s.name FROM sports s JOIN rounds r ON s.id = r.sport_id ORDER BY s.name").fetchall()
     conn.close()
     return render_template('public/list_brackets.html', sports=sports_with_rounds, page_title="Tournament Brackets")
 
@@ -308,19 +312,13 @@ def view_bracket(sport_id):
     if sport is None:
         return redirect(url_for('list_brackets'))
     query = """
-        SELECT
-            r.name as round_name,
-            m.result_details,
-            c1.name as class1_name,
-            c2.name as class2_name,
-            w.name as winner_name
+        SELECT r.name as round_name, c1.name as class1_name, c2.name as class2_name, w.name as winner_name
         FROM matches m
         JOIN rounds r ON m.round_id = r.id
         JOIN classes c1 ON m.class1_id = c1.id
         JOIN classes c2 ON m.class2_id = c2.id
         LEFT JOIN classes w ON m.winner_id = w.id
-        WHERE m.sport_id = ?
-        ORDER BY r.id, m.id
+        WHERE m.sport_id = ? ORDER BY r.id, m.id
     """
     matches = conn.execute(query, (sport_id,)).fetchall()
     rounds = {}
@@ -457,10 +455,7 @@ def create_member():
             photo_filename = secure_filename(photo_file.filename)
             photo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], photo_filename))
         conn = get_db_connection()
-        conn.execute(
-            'INSERT INTO team_members (name, role, photo_filename) VALUES (?, ?, ?)',
-            (name, role, photo_filename)
-        )
+        conn.execute('INSERT INTO team_members (name, role, photo_filename) VALUES (?, ?, ?)', (name, role, photo_filename))
         conn.commit()
         conn.close()
         flash('Team member added successfully!', 'success')
@@ -480,10 +475,7 @@ def edit_member(member_id):
         if photo_file and photo_file.filename != '':
             photo_filename = secure_filename(photo_file.filename)
             photo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], photo_filename))
-        conn.execute(
-            'UPDATE team_members SET name = ?, role = ?, photo_filename = ? WHERE id = ?',
-            (name, role, photo_filename, member_id)
-        )
+        conn.execute('UPDATE team_members SET name = ?, role = ?, photo_filename = ? WHERE id = ?', (name, role, photo_filename, member_id))
         conn.commit()
         conn.close()
         flash('Team member updated successfully!', 'success')
@@ -499,7 +491,7 @@ def delete_member(member_id):
     conn.execute('DELETE FROM team_members WHERE id = ?', (member_id,))
     conn.commit()
     conn.close()
-    flash('Team member deleted successfully.', 'success')
+    flash('Team member deleted successfully!', 'success')
     return redirect(url_for('admin_list_members'))
 
 @app.route('/admin/stories')
@@ -523,10 +515,7 @@ def create_story():
             image_filename = secure_filename(image_file.filename)
             image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
         conn = get_db_connection()
-        conn.execute(
-            'INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)',
-            (title, content, author, image_filename)
-        )
+        conn.execute('INSERT INTO stories (title, content, author, image_filename) VALUES (?, ?, ?, ?)', (title, content, author, image_filename))
         conn.commit()
         conn.close()
         flash('Story created successfully!', 'success')
@@ -547,10 +536,7 @@ def edit_story(story_id):
         if image_file and image_file.filename != '':
             image_filename = secure_filename(image_file.filename)
             image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-        conn.execute(
-            'UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?',
-            (title, content, author, image_filename, story_id)
-        )
+        conn.execute('UPDATE stories SET title = ?, content = ?, author = ?, image_filename = ? WHERE id = ?', (title, content, author, image_filename, story_id))
         conn.commit()
         conn.close()
         flash('Story updated successfully!', 'success')
@@ -593,10 +579,7 @@ def create_round():
         if not all([sport_id, name, round_type]):
             flash('All fields are required.', 'danger')
             return redirect(url_for('create_round'))
-        conn.execute(
-            'INSERT INTO rounds (sport_id, name, round_type) VALUES (?, ?, ?)',
-            (sport_id, name, round_type)
-        )
+        conn.execute('INSERT INTO rounds (sport_id, name, round_type) VALUES (?, ?, ?)', (sport_id, name, round_type))
         conn.commit()
         conn.close()
         flash('Round created successfully!', 'success')
@@ -674,7 +657,7 @@ def create_match():
             classes = conn.execute('SELECT * FROM classes ORDER BY name').fetchall()
             conn.close()
             default_time = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M')
-            return render_template('admin/match_form.html', rounds=rounds, classes=classes, default_time=default_time, form_title="Create New Match", error="Teams cannot be the same.")
+            return render_template('admin/match_form.html', rounds=rounds, classes=classes, default_time=default_time, form_title="Create New Match")
         sport_id = conn.execute('SELECT sport_id FROM rounds WHERE id = ?', (round_id,)).fetchone()['sport_id']
         conn.execute(
             'INSERT INTO matches (sport_id, round_id, class1_id, class2_id, match_time, status) VALUES (?, ?, ?, ?, ?, ?)',
@@ -725,7 +708,7 @@ def edit_match(match_id):
     if match is None:
         flash('Match not found!', 'danger')
         return redirect(url_for('list_matches'))
-    uses_live_finalizer = match['sport_name'] in SPORT_BUTTON_CONFIG and match['sport_name'] != 'default'
+    uses_live_finalizer = match['sport_name'] in SPORT_CONFIG and SPORT_CONFIG[match['sport_name']]['format'] != 'points'
     return render_template('admin/match_form.html', match=match, form_title="Edit Match", uses_live_finalizer=uses_live_finalizer)
 
 @app.route('/admin/matches/<int:match_id>/delete', methods=['POST'])
@@ -813,70 +796,109 @@ def manage_announcement():
             content = f.read()
     return render_template('admin/announcement_form.html', content=content)
 
+# --- ADMIN LIVE SCORING ---
+
 @app.route('/admin/matches/<int:match_id>/live')
 @admin_required
 def live_score_editor(match_id):
     conn = get_db_connection()
-    match = conn.execute("""
-        SELECT m.*, s.name as sport_name, r.name as round_name, c1.name as class1_name, c2.name as class2_name
-        FROM matches m
-        JOIN sports s ON m.sport_id = s.id
-        JOIN rounds r ON m.round_id = r.id
-        JOIN classes c1 ON m.class1_id = c1.id
-        JOIN classes c2 ON m.class2_id = c2.id
-        WHERE m.id = ?
-    """, (match_id,)).fetchone()
-    if match is None:
+    match = conn.execute("SELECT m.*, s.name as sport_name, r.name as round_name, c1.name as class1_name, c2.name as class2_name FROM matches m JOIN sports s ON m.sport_id = s.id JOIN rounds r ON m.round_id = r.id JOIN classes c1 ON m.class1_id = c1.id JOIN classes c2 ON m.class2_id = c2.id WHERE m.id = ?", (match_id,)).fetchone()
+    if not match:
         flash('Match not found!', 'danger')
         return redirect(url_for('list_matches'))
-    scores = {
-        match['class1_id']: get_live_scores(conn, match_id, match['class1_id']),
-        match['class2_id']: get_live_scores(conn, match_id, match['class2_id'])
-    }
-    buttons = SPORT_BUTTON_CONFIG.get(match['sport_name'], SPORT_BUTTON_CONFIG['default'])
+
+    sport_name = match['sport_name']
+    config = SPORT_CONFIG.get(sport_name, SPORT_CONFIG['default'])
+    score_format = config['format']
+    
+    scores = {}
+    if score_format == 'points':
+        scores = {
+            match['class1_id']: get_live_scores(conn, match_id, match['class1_id']),
+            match['class2_id']: get_live_scores(conn, match_id, match['class2_id'])
+        }
+    elif score_format == 'sets_detailed':
+        scores = get_set_scores(conn, match_id, match['class1_id'], match['class2_id'])
+
+    buttons = SPORT_BUTTON_CONFIG.get(sport_name)
     conn.close()
-    is_cricket = 'Cricket' in match['sport_name']
-    return render_template('admin/live_score_form.html', match=match, scores=scores, buttons=buttons, is_cricket=is_cricket)
+    
+    is_cricket = 'Cricket' in sport_name
+    
+    return render_template('admin/live_score_form.html', match=match, scores=scores, buttons=buttons, is_cricket=is_cricket, score_format=score_format)
+
+@app.route('/admin/matches/end-set', methods=['POST'])
+@admin_required
+def end_set():
+    """Logs the end of a set from the HTML form."""
+    match_id = request.form.get('match_id')
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)",
+        (match_id, 0, 0, 'Set End', 0)
+    )
+    conn.commit()
+    conn.close()
+    flash('Set finalized.', 'success')
+    return redirect(url_for('live_score_editor', match_id=match_id))
 
 @app.route('/admin/matches/add-score', methods=['POST'])
 @admin_required
 def add_score():
+    """AJAX endpoint for simple, point-based scoring events."""
     data = request.json
     match_id = data.get('match_id')
     team_id = data.get('team_id')
     points = data.get('points')
     event_type = data.get('event_type')
     counts_as_ball = data.get('counts_as_ball')
+    
     conn = get_db_connection()
     conn.execute(
         'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
         (match_id, team_id, points, event_type, counts_as_ball)
     )
-    if event_type == 'Run Out':
-        conn.execute(
-            'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
-            (match_id, team_id, 0, 'Wicket', 0)
-        )
     conn.commit()
     new_stats = get_live_scores(conn, match_id, team_id)
     conn.close()
+    
     return jsonify({
-        'success': True,
-        'team_id': team_id,
-        'new_total': new_stats['score'],
-        'new_wickets': new_stats['wickets'],
-        'new_overs': new_stats['overs'],
-        'new_balls': new_stats['balls']
+        'success': True, 'team_id': team_id,
+        'new_total': new_stats['score'], 'new_wickets': new_stats['wickets'],
+        'new_overs': new_stats['overs'], 'new_balls': new_stats['balls']
     })
+
+@app.route('/admin/matches/add-score-set', methods=['POST'])
+@admin_required
+def add_score_set():
+    """AJAX endpoint for adding a point in a set-based match."""
+    data = request.json
+    match_id = data.get('match_id')
+    team_id = data.get('team_id')
+    
+    conn = get_db_connection()
+    conn.execute(
+        'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
+        (match_id, team_id, 1, 'Point', 0)
+    )
+    conn.commit()
+
+    match = conn.execute('SELECT class1_id, class2_id FROM matches WHERE id = ?', (match_id,)).fetchone()
+    new_scores = get_set_scores(conn, match_id, match['class1_id'], match['class2_id'])
+    conn.close()
+
+    return jsonify({'success': True, 'new_scores': new_scores})
 
 @app.route('/admin/matches/log-complex-event', methods=['POST'])
 @admin_required
 def log_complex_event():
+    """Logs a complex, two-part event like a wide + runs for cricket."""
     data = request.json
     match_id = data.get('match_id')
     team_id = data.get('team_id')
     base_event = data.get('base_event')
     extra_runs = data.get('extra_runs')
+
     conn = get_db_connection()
     conn.execute(
         'INSERT INTO score_log (match_id, team_id, points_scored, event_type, counts_as_ball) VALUES (?, ?, ?, ?, ?)',
@@ -890,6 +912,7 @@ def log_complex_event():
     conn.commit()
     new_stats = get_live_scores(conn, match_id, team_id)
     conn.close()
+    
     return jsonify({
         'success': True, 'team_id': team_id, 'new_total': new_stats['score'],
         'new_wickets': new_stats['wickets'], 'new_overs': new_stats['overs'], 'new_balls': new_stats['balls']
@@ -898,6 +921,7 @@ def log_complex_event():
 @app.route('/admin/matches/<int:match_id>/log-event', methods=['POST'])
 @admin_required
 def log_manual_event(match_id):
+    """Logs a manual, non-scoring event from the HTML form."""
     team_id = request.form.get('team_id')
     event_description = request.form.get('event_description')
     if not all([team_id, event_description]):
@@ -918,21 +942,46 @@ def log_manual_event(match_id):
 def finalize_match(match_id):
     conn = get_db_connection()
     match = conn.execute('SELECT * FROM matches WHERE id = ?', (match_id,)).fetchone()
-    stats1 = get_live_scores(conn, match_id, match['class1_id'])
-    stats2 = get_live_scores(conn, match_id, match['class2_id'])
-    if stats1['score'] > stats2['score']:
-        winner_id = match['class1_id']
-    else:
-        winner_id = match['class2_id']
-    winner_name = conn.execute('SELECT name FROM classes WHERE id = ?', (winner_id,)).fetchone()['name']
-    result_details = f"{winner_name} won"
+    sport_name = conn.execute('SELECT name FROM sports WHERE id = ?', (match['sport_id'],)).fetchone()['name']
+    config = SPORT_CONFIG.get(sport_name, SPORT_CONFIG['default'])
+    
+    winner_id = None
+    result_details_for_db = ""
+
+    if config['format'] == 'points':
+        stats1 = get_live_scores(conn, match_id, match['class1_id'])
+        stats2 = get_live_scores(conn, match_id, match['class2_id'])
+        winner_id = match['class1_id'] if stats1['score'] > stats2['score'] else match['class2_id']
+        winner_name = conn.execute('SELECT name FROM classes WHERE id = ?', (winner_id,)).fetchone()['name']
+        result_details_for_db = f"{winner_name} won"
+    
+    elif config['format'] == 'sets_detailed':
+        scores = get_set_scores(conn, match_id, match['class1_id'], match['class2_id'])
+        class1_id = match['class1_id']
+        class2_id = match['class2_id']
+        
+        if scores['current_set_scores'][class1_id] > 0 or scores['current_set_scores'][class2_id] > 0:
+            scores['completed_sets'].append(scores['current_set_scores'])
+            if scores['current_set_scores'][class1_id] > scores['current_set_scores'][class2_id]:
+                scores['sets_won'][class1_id] += 1
+            else:
+                scores['sets_won'][class2_id] += 1
+
+        winner_id = class1_id if scores['sets_won'][class1_id] > scores['sets_won'][class2_id] else class2_id
+        loser_id = class2_id if winner_id == class1_id else class1_id
+        winner_name = conn.execute('SELECT name FROM classes WHERE id = ?', (winner_id,)).fetchone()['name']
+        
+        set_scores_str = ', '.join([f"{s[class1_id]}-{s[class2_id]}" for s in scores['completed_sets']])
+        result_details_for_db = f"{winner_name} won {scores['sets_won'][winner_id]}-{scores['sets_won'][loser_id]} ({set_scores_str})"
+
     conn.execute(
         'UPDATE matches SET status = ?, winner_id = ?, result_details = ? WHERE id = ?',
-        ('COMPLETED', winner_id, result_details, match_id)
+        ('COMPLETED', winner_id, result_details_for_db, match_id)
     )
     conn.commit()
     conn.close()
-    flash(f"Match finalized successfully. {result_details}", 'success')
+    
+    flash("Match finalized successfully.", 'success')
     return redirect(url_for('list_matches'))
 
 @app.route('/admin/matches/<int:match_id>/undo', methods=['POST'])
@@ -951,7 +1000,6 @@ def undo_last_event(match_id):
         flash('No event to undo.', 'warning')
     conn.close()
     return redirect(url_for('live_score_editor', match_id=match_id))
-
 
 # --- CONTEXT PROCESSOR ---
 @app.context_processor
@@ -975,3 +1023,6 @@ def handle_404(e):
 def handle_500(e):
     """Renders a custom 500 Internal Server Error page."""
     return render_template('public/500.html'), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)

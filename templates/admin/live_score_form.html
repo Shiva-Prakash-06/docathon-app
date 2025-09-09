@@ -3,15 +3,11 @@
 
 {% block content %}
 <style>
-    .score-controls .btn-group {
-        display: flex;
-        flex-wrap: wrap; /* Allows buttons to wrap to the next line */
-        justify-content: center;
-    }
-    .score-controls .btn {
-        margin: 4px; /* Adds spacing between buttons */
-    }
+    .score-controls .btn-group { display: flex; flex-wrap: wrap; justify-content: center; }
+    .score-controls .btn { margin: 4px; }
+    .set-table { max-width: 400px; margin: 20px auto; }
 </style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('list_matches') }}">&larr; Back to All Matches</a>
@@ -22,12 +18,14 @@
         <form action="{{ url_for('undo_last_event', match_id=match.id) }}" method="POST">
             <button type="submit" class="btn btn-lg btn-secondary">Undo Last Event</button>
         </form>
-        <form action="{{ url_for('finalize_match', match_id=match.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to finalize this match? This will set the winner and complete the match.');">
+        <form action="{{ url_for('finalize_match', match_id=match.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to finalize this match?');">
             <button type="submit" class="btn btn-lg btn-success">Finalize Match</button>
         </form>
     </div>
 </div>
 
+{# POINT-BASED SCORING INTERFACE (Cricket, Basketball, etc.) #}
+{% if score_format == 'points' %}
 <div class="card bg-dark border-secondary">
     <div class="card-body p-4">
         <div class="row align-items-center text-center">
@@ -38,9 +36,7 @@
                     {% if is_cricket %}/<span id="wickets-{{ match.class1_id }}">{{ scores[match.class1_id].wickets }}</span>{% endif %}
                 </p>
                 {% if is_cricket %}
-                <p class="text-muted h5">
-                    Overs: <span id="overs-{{ match.class1_id }}">{{ scores[match.class1_id].overs }}</span>.<span id="balls-{{ match.class1_id }}">{{ scores[match.class1_id].balls }}</span>
-                </p>
+                <p class="text-muted h5">Overs: <span id="overs-{{ match.class1_id }}">{{ scores[match.class1_id].overs }}</span>.<span id="balls-{{ match.class1_id }}">{{ scores[match.class1_id].balls }}</span></p>
                 {% endif %}
             </div>
             <div class="col-2"><span class="display-4 text-muted">VS</span></div>
@@ -51,9 +47,7 @@
                     {% if is_cricket %}/<span id="wickets-{{ match.class2_id }}">{{ scores[match.class2_id].wickets }}</span>{% endif %}
                 </p>
                 {% if is_cricket %}
-                <p class="text-muted h5">
-                    Overs: <span id="overs-{{ match.class2_id }}">{{ scores[match.class2_id].overs }}</span>.<span id="balls-{{ match.class2_id }}">{{ scores[match.class2_id].balls }}</span>
-                </p>
+                <p class="text-muted h5">Overs: <span id="overs-{{ match.class2_id }}">{{ scores[match.class2_id].overs }}</span>.<span id="balls-{{ match.class2_id }}">{{ scores[match.class2_id].balls }}</span></p>
                 {% endif %}
             </div>
         </div>
@@ -89,6 +83,57 @@
     </div>
 </div>
 
+{# DETAILED SET-BASED SCORING INTERFACE (Volleyball, Throwball) #}
+{% elif score_format == 'sets_detailed' %}
+<div class="card bg-dark border-secondary">
+    <div class="card-body p-4 text-center">
+        <div class="row align-items-center">
+            <div class="col-5">
+                <h2 class="h3">{{ match.class1_name }}</h2>
+                <p class="display-1 fw-bold text-warning" id="sets-won-{{ match.class1_id }}">{{ scores.sets_won[match.class1_id] }}</p>
+                <small class="text-muted">Sets Won</small>
+            </div>
+            <div class="col-2"><span class="display-4 text-muted">VS</span></div>
+            <div class="col-5">
+                <h2 class="h3">{{ match.class2_name }}</h2>
+                <p class="display-1 fw-bold text-warning" id="sets-won-{{ match.class2_id }}">{{ scores.sets_won[match.class2_id] }}</p>
+                <small class="text-muted">Sets Won</small>
+            </div>
+        </div>
+        <hr>
+        <h5 class="mt-4">Current Set Score</h5>
+        <div class="row align-items-center fs-1">
+             <div class="col-5"><span id="current-score-{{ match.class1_id }}">{{ scores.current_set_scores[match.class1_id] }}</span></div>
+             <div class="col-2"><span class="text-muted">-</span></div>
+             <div class="col-5"><span id="current-score-{{ match.class2_id }}">{{ scores.current_set_scores[match.class2_id] }}</span></div>
+        </div>
+        <div class="row text-center mt-3">
+            <div class="col-6 border-end border-secondary">
+                <button class="btn btn-outline-warning btn-lg score-btn-set" data-team-id="{{ match.class1_id }}">+1</button>
+            </div>
+            <div class="col-6">
+                <button class="btn btn-outline-warning btn-lg score-btn-set" data-team-id="{{ match.class2_id }}">+1</button>
+            </div>
+        </div>
+        <form action="{{ url_for('end_set') }}" method="POST" class="mt-4">
+             <input type="hidden" name="match_id" value="{{ match.id }}">
+             <button type="submit" class="btn btn-info">Finalize Current Set</button>
+        </form>
+        {% if scores.completed_sets %}
+        <table class="table table-dark table-bordered set-table mt-4">
+            <thead><tr><th>Set</th><th>{{ match.class1_name }}</th><th>{{ match.class2_name }}</th></tr></thead>
+            <tbody>
+                {% for set_score in scores.completed_sets %}
+                <tr><td>{{ loop.index }}</td><td>{{ set_score[match.class1_id] }}</td><td>{{ set_score[match.class2_id] }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+
 <div class="card bg-dark border-secondary mt-4">
     <div class="card-body">
         <h5 class="card-title">Log a Manual Event</h5>
@@ -114,8 +159,11 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const scoreFormat = "{{ score_format }}";
     const matchId = {{ match.id }};
     const isCricket = {{ is_cricket|tojson }};
+    const team1Id = {{ match.class1_id }};
+    const team2Id = {{ match.class2_id }};
     let activeComplexEvent = null;
 
     const runButtons = [
@@ -127,15 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         {'label': '+6', 'points': 6, 'type': 'Runs', 'counts_as_ball': 1},
     ];
 
-    function updateScoreDisplay(data) {
-        document.getElementById(`score-${data.team_id}`).textContent = data.new_total;
-        if (isCricket) {
-            document.getElementById(`wickets-${data.team_id}`).textContent = data.new_wickets;
-            document.getElementById(`overs-${data.team_id}`).textContent = data.new_overs;
-            document.getElementById(`balls-${data.team_id}`).textContent = data.new_balls;
-        }
-    }
-
+    // --- SHARED HELPER FUNCTIONS ---
     async function sendRequest(url, body) {
         try {
             const response = await fetch(url, {
@@ -144,79 +184,111 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(body),
             });
             if (!response.ok) throw new Error('Network response was not ok');
-            const data = await response.json();
-            updateScoreDisplay(data);
+            return await response.json();
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to update score.');
         }
     }
-
-    function resetControls(teamId) {
-        const controlDiv = document.getElementById(`team-${teamId}-controls`);
-        controlDiv.innerHTML = '';
-        const originalButtons = {{ buttons|tojson }};
-        originalButtons.forEach(buttonData => {
-            const button = document.createElement('button');
-            button.className = 'btn btn-outline-warning btn-lg score-btn';
-            button.dataset.teamId = teamId;
-            button.dataset.isComplex = buttonData.isComplex;
-            button.dataset.event = JSON.stringify(buttonData);
-            button.textContent = buttonData.label;
-            controlDiv.appendChild(button);
-        });
-        activeComplexEvent = null;
-        addEventListenersToButtons();
-    }
-
-    function showRunButtons(teamId, baseEvent) {
-        activeComplexEvent = { teamId, baseEvent };
-        const controlDiv = document.getElementById(`team-${teamId}-controls`);
-        controlDiv.innerHTML = `<span class="text-warning me-2">Runs on ${baseEvent.type}?</span>`;
-
-        runButtons.forEach(runData => {
-            const button = document.createElement('button');
-            button.className = 'btn btn-outline-info btn-lg';
-            button.textContent = runData.label;
-            button.onclick = () => {
-                const body = {
-                    match_id: matchId,
-                    team_id: teamId,
-                    base_event: baseEvent,
-                    extra_runs: runData
-                };
-                sendRequest('{{ url_for("log_complex_event") }}', body);
-                resetControls(teamId);
-            };
-            controlDiv.appendChild(button);
-        });
-    }
-
-    function handleButtonClick(event) {
-        const button = event.target;
-        const teamId = button.dataset.teamId;
-        const isComplex = button.dataset.isComplex === 'true';
-        const eventData = JSON.parse(button.dataset.event);
-
-        if (isComplex) {
-            showRunButtons(teamId, eventData);
-        } else {
-            const body = {
-                match_id: matchId, team_id: teamId,
-                points: eventData.points, event_type: eventData.type,
-                counts_as_ball: eventData.counts_as_ball
-            };
-            sendRequest('{{ url_for("add_score") }}', body);
+    
+    function updateScoreDisplay(data) {
+        if (scoreFormat === 'points') {
+            document.getElementById(`score-${data.team_id}`).textContent = data.new_total;
+            if (isCricket) {
+                document.getElementById(`wickets-${data.team_id}`).textContent = data.new_wickets;
+                document.getElementById(`overs-${data.team_id}`).textContent = data.new_overs;
+                document.getElementById(`balls-${data.team_id}`).textContent = data.new_balls;
+            }
+        } else if (scoreFormat === 'sets_detailed') {
+            document.getElementById(`current-score-${team1Id}`).textContent = data.new_scores.current_set_scores[team1Id];
+            document.getElementById(`current-score-${team2Id}`).textContent = data.new_scores.current_set_scores[team2Id];
         }
     }
 
-    function addEventListenersToButtons() {
-        document.querySelectorAll('.score-btn').forEach(button => {
-            button.addEventListener('click', handleButtonClick);
+    // --- POINT-BASED SCORING LOGIC ---
+    if (scoreFormat === "points") {
+        function resetControls(teamId) {
+            const controlDiv = document.getElementById(`team-${teamId}-controls`);
+            controlDiv.innerHTML = '';
+            const originalButtons = {{ buttons|tojson }};
+            originalButtons.forEach(buttonData => {
+                const button = document.createElement('button');
+                button.className = 'btn btn-outline-warning btn-lg score-btn';
+                button.dataset.teamId = teamId;
+                button.dataset.isComplex = buttonData.isComplex;
+                button.dataset.event = JSON.stringify(buttonData);
+                button.textContent = buttonData.label;
+                controlDiv.appendChild(button);
+            });
+            activeComplexEvent = null;
+            addEventListenersToButtons();
+        }
+
+        function showRunButtons(teamId, baseEvent) {
+            activeComplexEvent = { teamId, baseEvent };
+            const controlDiv = document.getElementById(`team-${teamId}-controls`);
+            controlDiv.innerHTML = `<span class="text-warning me-2">Runs on ${baseEvent.type}?</span>`;
+
+            runButtons.forEach(runData => {
+                const button = document.createElement('button');
+                button.className = 'btn btn-outline-info btn-lg';
+                button.textContent = runData.label;
+                button.onclick = async () => {
+                    const body = {
+                        match_id: matchId, team_id: teamId,
+                        base_event: baseEvent, extra_runs: runData
+                    };
+                    const data = await sendRequest('{{ url_for("log_complex_event") }}', body);
+                    if(data) updateScoreDisplay(data);
+                    resetControls(teamId);
+                };
+                controlDiv.appendChild(button);
+            });
+        }
+
+        function handleButtonClick(event) {
+            const button = event.target;
+            const teamId = button.dataset.teamId;
+            const isComplex = button.dataset.isComplex === 'true';
+            const eventData = JSON.parse(button.dataset.event);
+
+            if (isComplex) {
+                showRunButtons(teamId, eventData);
+            } else {
+                const body = {
+                    match_id: matchId, team_id: teamId,
+                    points: eventData.points, event_type: eventData.type,
+                    counts_as_ball: eventData.counts_as_ball
+                };
+                sendRequest('{{ url_for("add_score") }}', body).then(data => {
+                    if (data) updateScoreDisplay(data);
+                });
+            }
+        }
+
+        function addEventListenersToButtons() {
+            document.querySelectorAll('.score-btn').forEach(button => {
+                button.addEventListener('click', handleButtonClick);
+            });
+        }
+        addEventListenersToButtons();
+    }
+    
+    // --- SET-BASED SCORING LOGIC ---
+    else if (scoreFormat === "sets_detailed") {
+        document.querySelectorAll('.score-btn-set').forEach(button => {
+            button.addEventListener('click', async () => {
+                const teamId = button.dataset.teamId;
+                const body = {
+                    match_id: matchId, team_id: teamId,
+                    points: 1, event_type: 'Point', counts_as_ball: 0
+                };
+                // We reuse the 'add_score' endpoint, but need a different API to get set scores back
+                const data = await sendRequest('{{ url_for("add_score_set") }}', body);
+                if (data) updateScoreDisplay(data);
+            });
         });
     }
-
-    addEventListenersToButtons();
 });
 </script>
 {% endblock %}
