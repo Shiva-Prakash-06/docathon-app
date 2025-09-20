@@ -753,11 +753,14 @@ def declare_walkover(match_id):
 @app.route('/admin/adjustments', methods=['GET', 'POST'])
 @admin_required
 def point_adjustments():
+    """Page to manually add or subtract points for any class."""
     conn = get_db_connection()
+
     if request.method == 'POST':
         class_id = request.form.get('class_id')
         points = request.form.get('points')
         reason = request.form.get('reason')
+
         if not all([class_id, points, reason]):
             flash('All fields are required.', 'danger')
         elif not points.lstrip('-').isdigit():
@@ -769,16 +772,33 @@ def point_adjustments():
             )
             conn.commit()
             flash('Point adjustment saved successfully!', 'success')
+        
         return redirect(url_for('point_adjustments'))
+
+    # GET request: Fetch data for the form and the log
     classes = conn.execute('SELECT * FROM classes ORDER BY name').fetchall()
+    # CORRECTED: Added pa.id to the SELECT statement
     adjustments = conn.execute("""
-        SELECT pa.points, pa.reason, pa.created_at, c.name as class_name
+        SELECT pa.id, pa.points, pa.reason, pa.created_at, c.name as class_name
         FROM point_adjustments pa
         JOIN classes c ON pa.class_id = c.id
         ORDER BY pa.created_at DESC
     """).fetchall()
+    
     conn.close()
+    
     return render_template('admin/adjustments_form.html', classes=classes, adjustments=adjustments)
+
+@app.route('/admin/adjustments/<int:adjustment_id>/delete', methods=['POST'])
+@admin_required
+def delete_adjustment(adjustment_id):
+    """Deletes a specific manual point adjustment."""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM point_adjustments WHERE id = ?', (adjustment_id,))
+    conn.commit()
+    conn.close()
+    flash('Point adjustment deleted successfully.', 'success')
+    return redirect(url_for('point_adjustments'))
 
 @app.route('/admin/announcement', methods=['GET', 'POST'])
 @admin_required
