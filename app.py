@@ -840,7 +840,8 @@ def live_score_editor(match_id):
     elif score_format == 'sets_detailed':
         scores = get_set_scores(conn, match_id, match['class1_id'], match['class2_id'])
 
-    buttons = SPORT_BUTTON_CONFIG.get(sport_name)
+    # CORRECTED: Provide an empty list [] as a default if no buttons are defined
+    buttons = SPORT_BUTTON_CONFIG.get(sport_name, [])
     conn.close()
     
     is_cricket = 'Cricket' in sport_name
